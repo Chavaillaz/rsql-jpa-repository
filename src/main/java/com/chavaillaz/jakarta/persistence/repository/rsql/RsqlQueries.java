@@ -12,6 +12,7 @@ import cz.jirutka.rsql.parser.ast.LogicalNode;
 import cz.jirutka.rsql.parser.ast.NoArgRSQLVisitorAdapter;
 import cz.jirutka.rsql.parser.ast.Node;
 import cz.jirutka.rsql.parser.ast.OrNode;
+import org.hibernate.query.sqm.TerminalPathException;
 
 import com.chavaillaz.jakarta.persistence.repository.Criteria;
 import com.chavaillaz.jakarta.persistence.repository.EntityOrdering;
@@ -153,9 +154,9 @@ public class RsqlQueries<E> {
      * visitor holds the root it builds on: a visitor is therefore taken from the given provider at each
      * application.
      * <p>
-     * An argument the visitor cannot parse for the type of its property is a malformed filter sent by an API
-     * consumer: the criteria raise it as an {@link IllegalArgumentException} when applied, which a query does before
-     * issuing any statement.
+     * An argument the visitor cannot parse for the type of its property, or a selector reaching through a basic
+     * attribute, is a malformed filter sent by an API consumer: the criteria raise it as an
+     * {@link IllegalArgumentException} when applied, which a query does before issuing any statement.
      *
      * @param context  The repository the query is written for
      * @param rsqlNode The parsed RSQL query
@@ -170,8 +171,9 @@ public class RsqlQueries<E> {
                 return resolved.accept(
                         visitors.get().defineRoot(root),
                         new EntityManagerAdapter(context.entityManager()::getMetamodel, () -> criteriaBuilder));
-            } catch (ArgumentFormatException e) {
-                // Only a RuntimeException, where the API layer answers an IllegalArgumentException with a 400
+            } catch (ArgumentFormatException | TerminalPathException e) {
+                // An unparsable argument, or a selector reaching through a basic attribute such as name.origin, which
+                // the API layer answers with a 400 only as an IllegalArgumentException
                 throw new IllegalArgumentException(e.getMessage(), e);
             }
         };

@@ -145,6 +145,14 @@ class RsqlQueriesTest extends HibernateTest {
     }
 
     @Test
+    @DisplayName("rejects a selector reaching through a basic attribute, as the illegal argument a consumer sent")
+    void rejectsASelectorThroughABasicAttribute() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> withCriteria("name.origin==" + ETHIOPIA, (context, criteria) -> queries().count(context, null, criteria)))
+                .withMessageContaining("has no attribute 'origin'");
+    }
+
+    @Test
     @DisplayName("rejects a query on a property that is not declared searchable, as soon as it is translated")
     void rejectsANonSearchableProperty() {
         Map<String, String> searchable = Map.of("origin", "origin");
