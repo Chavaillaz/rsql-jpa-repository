@@ -26,6 +26,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.chavaillaz.jakarta.persistence.repository.example.CoffeeEntity;
 import com.chavaillaz.jakarta.persistence.repository.example.CoffeeRepositoryJpa;
@@ -169,6 +170,17 @@ class CoffeeRsqlSearchTest extends HibernateTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> withRepository(repository -> repository.count("roastedAt=gt=0")))
                 .withMessageContaining("Cannot sort or filter on unknown property roastedAt");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"strength==strong", "roast==BURNT", "price=lt=cheap"})
+    @DisplayName("rejects an argument its property cannot be parsed from, as the illegal argument a consumer sent")
+    void rejectsAnUnparsableArgument(String rsql) {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> countAll(rsql))
+                .withMessageContaining("Cannot cast");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> searchAll(rsql));
     }
 
     @Test

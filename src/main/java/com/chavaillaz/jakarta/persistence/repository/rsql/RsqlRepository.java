@@ -34,7 +34,8 @@ public interface RsqlRepository<E extends Identifiable<I>, I> extends Repository
      * @param rsql The RSQL filter expression, {@code null} or blank to count all the entities
      * @return The number of matching entities
      * @throws RSQLParserException      if the expression is not valid RSQL
-     * @throws IllegalArgumentException if the expression refers to a property that is not searchable
+     * @throws IllegalArgumentException if the expression refers to a property that is not searchable, or compares a
+     *                                  property to an argument its type cannot be parsed from
      */
     long count(@Nullable String rsql);
 
@@ -100,8 +101,9 @@ public interface RsqlRepository<E extends Identifiable<I>, I> extends Repository
      * @param pageable The requested page and ordering, {@link Pageable#UNPAGED} to disable the pagination
      * @return The corresponding page, never {@code null}
      * @throws RSQLParserException      if the expression is not valid RSQL
-     * @throws IllegalArgumentException if the expression refers to a property that is not searchable, or if the
-     *                                  requested ordering is not usable
+     * @throws IllegalArgumentException if the expression refers to a property that is not searchable, compares a
+     *                                  property to an argument its type cannot be parsed from, or if the requested
+     *                                  ordering is not usable
      */
     PaginationResult<E> search(@Nullable String rsql, Pageable pageable);
 
@@ -113,9 +115,10 @@ public interface RsqlRepository<E extends Identifiable<I>, I> extends Repository
      * @param cursor The requested position, size and ordering
      * @return The corresponding page with the tokens of the surrounding ones
      * @throws RSQLParserException      if the expression is not valid RSQL
-     * @throws IllegalArgumentException if the expression refers to a property that is not searchable, if the
-     *                                  ordering refers to an unknown property, to a collection, or if the cursor
-     *                                  is malformed or was issued for another ordering
+     * @throws IllegalArgumentException if the expression refers to a property that is not searchable, compares a
+     *                                  property to an argument its type cannot be parsed from, if the ordering is
+     *                                  not usable as a cursor key, or if the cursor is malformed or was issued for
+     *                                  another ordering
      */
     CursorResult<E> search(@Nullable String rsql, Cursor cursor);
 

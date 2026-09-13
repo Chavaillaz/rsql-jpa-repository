@@ -91,6 +91,10 @@ matching children is returned and counted once, and the ordering stays free to r
 `select distinct` is not on PostgreSQL and Oracle. A cursor query checks its ordering keys the same way too,
 refusing a nullable one before the first page is read.
 
+A malformed expression raises the `RSQLParserException` of the parser, and a selector that is not searchable, or an
+argument its property cannot be parsed from, such as `strength==strong`, an `IllegalArgumentException`: both are
+mistakes of the API consumer, to be answered with a `400 Bad Request`.
+
 ## Combining with typed queries
 
 `toCriteria(Node)` translates a parsed, non-blank RSQL query into that very `Criteria`, so that a repository method
