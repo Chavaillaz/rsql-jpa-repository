@@ -128,6 +128,17 @@ public CoffeeRepositoryJpa(EntityManager entityManager) {
 }
 ```
 
+## Logging
+
+The rsql-jpa visitor translating the queries logs every node and every argument it handles at `INFO`, through
+`java.util.logging`, whose default console handler prints them: raise the level of its loggers, so that the filters
+sent by the API consumers are not written to the logs at every request, such as in the `logging.properties` of the
+application:
+
+```properties
+com.github.tennaito.rsql.level = WARNING
+```
+
 ## Contributing
 
 If you have a feature request or found a bug, you can:
