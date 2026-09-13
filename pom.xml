@@ -74,6 +74,13 @@
             <groupId>io.github.trilobitsystems</groupId>
             <artifactId>rsql-jpa</artifactId>
             <version>v2023.35.5</version>
+            <exclusions>
+                <!-- Ships the very same classes as the fork of the parser declared above -->
+                <exclusion>
+                    <groupId>cz.jirutka.rsql</groupId>
+                    <artifactId>rsql-parser</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
