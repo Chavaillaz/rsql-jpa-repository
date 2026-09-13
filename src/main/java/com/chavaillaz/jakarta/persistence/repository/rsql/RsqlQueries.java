@@ -1,5 +1,10 @@
 package com.chavaillaz.jakarta.persistence.repository.rsql;
 
+import jakarta.persistence.criteria.CommonAbstractCriteria;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -23,10 +28,11 @@ import com.chavaillaz.jakarta.persistence.repository.RepositoryContext;
  * RSQL support of an entity type, translating a filter expression into {@link Criteria}, which the
  * {@link EntityQueries queries} of the entity apply like any other.
  * <p>
- * The predicate is built on the root each query hands over, so that an expression joining a collection is moved
- * into a semi join, and a cursor query checks and selects its keys, exactly as for criteria written by hand. Every
- * selector is first {@link #resolveProperties(RepositoryContext, Node) resolved} against the searchable properties
- * of the repository, so that the very same restriction and public naming govern the filtering and the sorting.
+ * The predicate is built on the root each query hands over, so that a cursor query checks and selects its keys
+ * exactly as for criteria written by hand, and each comparison reaching through an association is evaluated in a
+ * correlated {@code exists} subquery of its own. Every selector is first
+ * {@link #resolveProperties(RepositoryContext, Node) resolved} against the searchable properties of the repository,
+ * so that the very same restriction and public naming govern the filtering and the sorting.
  * <p>
  * One instance is shared by every repository over the same entity, what belongs to a repository travelling with
  * the {@link RepositoryContext} of each call.
@@ -150,9 +156,14 @@ public class RsqlQueries<E> {
      * Translates an RSQL query into criteria, its selectors being resolved against the searchable properties on
      * the spot, and its predicate being built on whichever root a query applies the criteria to.
      * <p>
+     * The visitor inner joins the association a selector reaches through, which drops the entities having no
+     * associated row before any predicate is evaluated, keeping them from matching another alternative of an OR. A
+     * comparison joining anything is therefore evaluated in a correlated {@code exists} subquery of its own, where
+     * the join only restricts that comparison, the logical nodes being combined here rather than by the visitor.
+     * <p>
      * A query applies criteria more than once, first to a throwaway root, see {@link Criteria#toPredicate}, and a
-     * visitor holds the root it builds on: a visitor is therefore taken from the given provider at each
-     * application.
+     * visitor holds the root it builds on: a visitor is therefore taken from the given provider for each comparison
+     * at each application.
      * <p>
      * An argument the visitor cannot parse for the type of its property, or a selector reaching through a basic
      * attribute, is a malformed filter sent by an API consumer: the criteria raise it as an
@@ -160,23 +171,72 @@ public class RsqlQueries<E> {
      *
      * @param context  The repository the query is written for
      * @param rsqlNode The parsed RSQL query
-     * @param visitors The provider of the visitor building the predicate, called at each application
+     * @param visitors The provider of the visitor building the predicate of a comparison, called for each
+     *                 comparison at each application
      * @return The corresponding criteria
      * @throws IllegalArgumentException if the query refers to a property that is not searchable
      */
     public Criteria<E> toCriteria(RepositoryContext<E> context, Node rsqlNode, Supplier<? extends JpaPredicateVisitor<E>> visitors) {
         Node resolved = resolveProperties(context, rsqlNode);
         return (criteriaBuilder, query, root) -> {
+            EntityManagerAdapter adapter = new EntityManagerAdapter(context.entityManager()::getMetamodel, () -> criteriaBuilder);
             try {
-                return resolved.accept(
-                        visitors.get().defineRoot(root),
-                        new EntityManagerAdapter(context.entityManager()::getMetamodel, () -> criteriaBuilder));
+                return resolved.accept(new NoArgRSQLVisitorAdapter<Predicate>() {
+
+                    @Override
+                    public Predicate visit(AndNode node) {
+                        return criteriaBuilder.and(combine(node));
+                    }
+
+                    @Override
+                    public Predicate visit(OrNode node) {
+                        return criteriaBuilder.or(combine(node));
+                    }
+
+                    @Override
+                    public Predicate visit(ComparisonNode node) {
+                        return compare(node, criteriaBuilder, query, root, adapter, visitors);
+                    }
+
+                    private Predicate[] combine(LogicalNode node) {
+                        return node.getChildren().stream().map(child -> child.accept(this)).toArray(Predicate[]::new);
+                    }
+                });
             } catch (ArgumentFormatException | TerminalPathException e) {
                 // An unparsable argument, or a selector reaching through a basic attribute such as name.origin, which
                 // the API layer answers with a 400 only as an IllegalArgumentException
                 throw new IllegalArgumentException(e.getMessage(), e);
             }
         };
+    }
+
+    /**
+     * Builds the predicate of a single comparison, in a correlated {@code exists} subquery of its own when it joins
+     * anything, see {@link #toCriteria(RepositoryContext, Node, Supplier)}.
+     * <p>
+     * What the visitor joins is only known once it is applied, so the comparison is first applied to a throwaway
+     * root, which issues no query.
+     *
+     * @param node            The comparison to build the predicate of
+     * @param criteriaBuilder The builder to use
+     * @param query           The query being built, to create the subquery from
+     * @param root            The root entity of the query
+     * @param adapter         The metamodel and the builder the visitor works with
+     * @param visitors        The provider of the visitor building the predicate
+     * @return The corresponding predicate
+     */
+    private Predicate compare(ComparisonNode node, CriteriaBuilder criteriaBuilder, CommonAbstractCriteria query, Root<E> root, EntityManagerAdapter adapter, Supplier<? extends JpaPredicateVisitor<E>> visitors) {
+        Root<E> probe = criteriaBuilder.createQuery(entityType).from(entityType);
+        node.accept(visitors.get().defineRoot(probe), adapter);
+        if (probe.getJoins().isEmpty()) {
+            return node.accept(visitors.get().defineRoot(root), adapter);
+        }
+
+        // Comparing the two roots as entities correlates them on the identifier, whatever it is made of
+        Subquery<Integer> matching = query.subquery(Integer.class);
+        Root<E> matched = matching.from(entityType);
+        Predicate predicate = node.accept(visitors.get().defineRoot(matched), adapter);
+        return criteriaBuilder.exists(matching.select(criteriaBuilder.literal(1)).where(criteriaBuilder.equal(matched, root), predicate));
     }
 
 }

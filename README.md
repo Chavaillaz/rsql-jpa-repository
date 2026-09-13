@@ -85,11 +85,12 @@ that is the target of no declared property is rejected. When `searchableProperti
 attribute of the entity is reachable as is, nested and collection properties included, such as `notes.flavour`.
 
 An RSQL query is translated into a `Criteria` of the base library, which the repository applies exactly as one
-written by hand. A query joining a collection, such as `notes.flavour==Citrus,notes.flavour==Floral`, is therefore
-moved into a correlated `exists` subquery rather than deduplicated with a `distinct`: an entity with several
-matching children is returned and counted once, and the ordering stays free to reach a joined attribute, which a
-`select distinct` is not on PostgreSQL and Oracle. A cursor query checks its ordering keys the same way too,
-refusing a nullable one before the first page is read.
+written by hand: a cursor query checks its ordering keys the same way, refusing a nullable one before the first page
+is read. Each comparison reaching through an association, such as `notes.flavour==Citrus`, is evaluated in a
+correlated `exists` subquery of its own rather than joined by the query itself. An entity with several matching
+children is therefore returned and counted once, without the `distinct` PostgreSQL and Oracle refuse to order on a
+joined attribute, and an entity with no associated row still matches the other alternatives of an OR, such as
+`roaster.name=="Kaldi Roasting",origin==Ethiopia` for a coffee from Ethiopia having no roaster.
 
 A malformed expression raises the `RSQLParserException` of the parser, and a selector that is not searchable, or an
 argument its property cannot be parsed from, such as `strength==strong`, an `IllegalArgumentException`: both are

@@ -158,6 +158,40 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     }
 
     @Test
+    @DisplayName("keeps an entity whose association is not set in an alternative reaching through it")
+    void keepsAnUnsetAssociationInAnAlternative() {
+        persist(coffee("Xigera"));
+        String rsql = "roaster==\"Moka Brothers\",origin==" + ETHIOPIA;
+
+        assertThat(namesOf(searchAll(rsql)))
+                .as("Xigera has no roaster, which must not keep its origin from matching")
+                .containsExactly(BLUE_MOUNTAIN, BOURBON_POINTU, GEISHA, HARRAR, KONA, SIDAMO, "Xigera", YIRGACHEFFE);
+        assertThat(countAll(rsql)).isEqualTo(8);
+    }
+
+    @Test
+    @DisplayName("keeps an entity without any child in an alternative reaching through a collection")
+    void keepsAnEntityWithoutChildrenInAnAlternative() {
+        persist(coffee("Xigera"));
+        String rsql = "notes==Citrus,name==Xigera";
+
+        assertThat(namesOf(searchAll(rsql)))
+                .as("Xigera has no tasting note, which must not keep its name from matching")
+                .containsExactly(GEISHA, SIDAMO, "Xigera", YIRGACHEFFE);
+        assertThat(countAll(rsql)).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("filters on the attributes of the entity itself without any subquery")
+    void filtersOnOwnAttributesWithoutSubquery() {
+        recordStatements();
+        searchAll("origin==" + ETHIOPIA + ";strength=gt=5");
+
+        assertThat(statements()).singleElement()
+                .satisfies(sql -> assertThat(sql.toLowerCase()).doesNotContain("exists"));
+    }
+
+    @Test
     @DisplayName("rejects a malformed query")
     void rejectsAMalformedQuery() {
         assertThatThrownBy(() -> withRepository(repository -> repository.count("origin=!=")))

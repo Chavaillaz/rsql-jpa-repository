@@ -116,8 +116,9 @@ public abstract class AbstractRsqlRepository<E extends Identifiable<I>, I> exten
     }
 
     /**
-     * Creates the visitor converting an RSQL query node into a predicate on the managed entity, called each time
-     * the criteria of a query are applied.
+     * Creates the visitor converting an RSQL comparison into a predicate on the managed entity, called for each
+     * comparison every time the criteria of a query are applied, the logical nodes being combined by
+     * {@link RsqlQueries#toCriteria(com.chavaillaz.jakarta.persistence.repository.RepositoryContext, Node, java.util.function.Supplier)}.
      * <p>
      * Override to customize the property mapping, the argument parsing or the predicate building, through the
      * builder tools of the visitor.
