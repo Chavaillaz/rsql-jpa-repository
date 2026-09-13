@@ -120,7 +120,7 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     }
 
     @Test
-    @DisplayName("returns distinct entities and a consistent count when the query joins a collection")
+    @DisplayName("returns each entity once and a consistent count when the query joins a collection")
     void deduplicatesTheCollectionJoins() {
         // Yirgacheffe has both notes, so a plain join would return it twice
         PaginationResult<CoffeeEntity> result = withRepository(repository ->
@@ -130,6 +130,23 @@ class CoffeeRsqlSearchTest extends HibernateTest {
         assertThat(result.totalItems())
                 .as("the count is distinct too, otherwise it would drift from the results")
                 .isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("orders on a nested property while filtering through a collection, which a distinct would reject")
+    void ordersOnANestedPropertyWhileJoining() {
+        recordStatements();
+
+        PaginationResult<CoffeeEntity> result = withRepository(repository ->
+                repository.search("notes==Citrus,notes==Floral", 0, 4, Sort.parse("roaster,name")));
+
+        assertThat(namesOf(result))
+                .as("Kaldi Roasting first, then Moka Brothers, each by name")
+                .containsExactly(SIDAMO, YIRGACHEFFE, BOURBON_POINTU, GEISHA);
+        assertThat(result.totalItems()).isEqualTo(4);
+        assertThat(statements())
+                .as("select distinct ... order by roaster.name is rejected by PostgreSQL and Oracle")
+                .noneMatch(sql -> sql.toLowerCase().contains("distinct"));
     }
 
     @Test
@@ -151,7 +168,7 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     void rejectsANonSearchableProperty() {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> withRepository(repository -> repository.count("roastedAt=gt=0")))
-                .withMessageContaining("Cannot sort or filter on the unknown property roastedAt");
+                .withMessageContaining("Cannot sort or filter on unknown property roastedAt");
     }
 
     @Test

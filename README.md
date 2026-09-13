@@ -84,24 +84,41 @@ aliased to — so `roaster==...` works, and so does `roaster.name==...` since `r
 that is the target of no declared property is rejected. When `searchableProperties()` is not overridden, every
 attribute of the entity is reachable as is, nested and collection properties included, such as `notes.flavour`.
 
-A query joining a collection, such as `notes.flavour==Citrus,notes.flavour==Floral`, is automatically made
-distinct, so that an entity with several matching children is not duplicated in the results, and the total count
-stays consistent with them.
+An RSQL query is translated into a `Criteria` of the base library, which the repository applies exactly as one
+written by hand. A query joining a collection, such as `notes.flavour==Citrus,notes.flavour==Floral`, is therefore
+moved into a correlated `exists` subquery rather than deduplicated with a `distinct`: an entity with several
+matching children is returned and counted once, and the ordering stays free to reach a joined attribute, which a
+`select distinct` is not on PostgreSQL and Oracle. A cursor query checks its ordering keys the same way too,
+refusing a nullable one before the first page is read.
 
-## Overriding the visitors
+## Combining with typed queries
 
-`createQueryVisitor()` and `createCountVisitor()` build the visitors converting an RSQL query node into a JPA
-criteria query; override them to customize the property mapping, the argument parsing or the predicate building,
-for instance to support a custom RSQL operator:
+`toCriteria(Node)` translates a parsed, non-blank RSQL query into that very `Criteria`, so that a repository method
+can combine it with a `Restriction` or criteria of its own, such as a scope the API consumers must not escape:
+
+```java
+public PaginationResult<CoffeeEntity> searchFromOrigin(String origin, String rsql, Pageable pageable) {
+    return search(Restriction.equal(CoffeeEntity_.origin, origin), toCriteria(rsqlParser.parse(rsql)), pageable);
+}
+```
+
+## Overriding the visitor
+
+`createPredicateVisitor()` builds the visitor converting an RSQL query node into a predicate on the entity; override
+it to customize the property mapping, the argument parsing or the predicate building through its builder tools, for
+instance to support a custom RSQL operator:
 
 ```java
 @Override
-protected JpaCriteriaQueryVisitor<CoffeeEntity> createQueryVisitor() {
-    JpaCriteriaQueryVisitor<CoffeeEntity> visitor = RsqlQueries.defaultQueryVisitor(CoffeeEntity.class);
-    // Customize the visitor here
+protected JpaPredicateVisitor<CoffeeEntity> createPredicateVisitor() {
+    JpaPredicateVisitor<CoffeeEntity> visitor = RsqlQueries.defaultPredicateVisitor(CoffeeEntity.class);
+    // Customize the visitor here, such as with visitor.setBuilderTools(...)
     return visitor;
 }
 ```
+
+The visitor holds the root it builds its predicate on, and a query applies its criteria more than once, so return a
+new visitor at each call.
 
 A custom `RSQLParser`, supporting additional operators, can be passed to the `AbstractRsqlRepository` constructor:
 

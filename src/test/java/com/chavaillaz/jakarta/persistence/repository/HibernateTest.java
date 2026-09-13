@@ -1,11 +1,13 @@
 package com.chavaillaz.jakarta.persistence.repository;
 
+import static java.util.Collections.synchronizedList;
 import static org.slf4j.LoggerFactory.getLogger;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.metamodel.EntityType;
 import java.lang.reflect.Constructor;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -39,6 +41,12 @@ public abstract class HibernateTest {
 
     protected static SessionFactory sessionFactory;
 
+    /**
+     * The SQL statements sent to the database, recorded so that a test can assert on what was actually issued and
+     * not only on what came back, such as the absence of a {@code distinct} no database agrees on.
+     */
+    protected static final List<String> statements = synchronizedList(new ArrayList<>());
+
     protected Session session;
 
     /**
@@ -59,6 +67,10 @@ public abstract class HibernateTest {
 
         Metadata metadata = sources.getMetadataBuilder().build();
         sessionFactory = metadata.getSessionFactoryBuilder()
+                .applyStatementInspector(sql -> {
+                    statements.add(sql);
+                    return sql;
+                })
                 .applyAutoFlushing(true)
                 .build();
 
@@ -84,6 +96,21 @@ public abstract class HibernateTest {
     public void setupCurrent() {
         session = sessionFactory.openSession();
         statistics().clear();
+        statements.clear();
+    }
+
+    /**
+     * @return The SQL statements sent to the database since the last {@link #recordStatements()}
+     */
+    protected static List<String> statements() {
+        return List.copyOf(statements);
+    }
+
+    /**
+     * Starts recording the SQL statements from scratch, the fixtures of a test having issued their own.
+     */
+    protected static void recordStatements() {
+        statements.clear();
     }
 
     @AfterEach

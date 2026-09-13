@@ -7,36 +7,31 @@ import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.HARR
 import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.KONA;
 import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.SIDAMO;
 import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.YIRGACHEFFE;
-import static com.chavaillaz.jakarta.persistence.repository.rsql.RsqlQueries.defaultCountVisitor;
-import static com.chavaillaz.jakarta.persistence.repository.rsql.RsqlQueries.defaultQueryVisitor;
+import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.namesOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Order;
 import jakarta.persistence.criteria.Root;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 
 import cz.jirutka.rsql.parser.RSQLParser;
-import cz.jirutka.rsql.parser.ast.Node;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.chavaillaz.jakarta.persistence.repository.Criteria;
 import com.chavaillaz.jakarta.persistence.repository.Cursor;
-import com.chavaillaz.jakarta.persistence.repository.CursorCodec;
-import com.chavaillaz.jakarta.persistence.repository.CursorKeyCodec;
 import com.chavaillaz.jakarta.persistence.repository.CursorResult;
-import com.chavaillaz.jakarta.persistence.repository.EntityOrdering;
+import com.chavaillaz.jakarta.persistence.repository.EntityQueries;
 import com.chavaillaz.jakarta.persistence.repository.HibernateTest;
 import com.chavaillaz.jakarta.persistence.repository.Pageable;
 import com.chavaillaz.jakarta.persistence.repository.PaginationResult;
+import com.chavaillaz.jakarta.persistence.repository.RepositoryContext;
 import com.chavaillaz.jakarta.persistence.repository.Sort;
 import com.chavaillaz.jakarta.persistence.repository.example.CoffeeEntity;
 import com.chavaillaz.jakarta.persistence.repository.example.Coffees;
@@ -56,130 +51,107 @@ class RsqlQueriesTest extends HibernateTest {
         setupSessionFactory(CoffeeEntity.class, RoasterEntity.class, TastingNoteEntity.class);
     }
 
-    private static Node parse(String rsql) {
-        return PARSER.parse(rsql);
-    }
-
     @BeforeEach
     void brewTheMenu() {
         runInTransaction(Coffees::persistMenu);
     }
 
-    private <T> T withQueries(Function<RsqlQueries<CoffeeEntity>, T> action) {
-        return withQueries(Map.of(), action);
+    private static EntityQueries<CoffeeEntity> queries() {
+        return EntityQueries.of(CoffeeEntity.class);
     }
 
-    private <T> T withQueries(Map<String, String> searchableProperties, Function<RsqlQueries<CoffeeEntity>, T> action) {
+    private <T> T withCriteria(String rsql, BiFunction<RepositoryContext<CoffeeEntity>, Criteria<CoffeeEntity>, T> action) {
+        return withCriteria(Map.of(), rsql, action);
+    }
+
+    /**
+     * Translates the given query within a transaction, recording the statements from there on, and hands the
+     * resulting criteria over to the given action along with the context it was translated for.
+     */
+    private <T> T withCriteria(Map<String, String> searchableProperties, String rsql, BiFunction<RepositoryContext<CoffeeEntity>, Criteria<CoffeeEntity>, T> action) {
         return inTransaction(entityManager -> {
-            EntityOrdering<CoffeeEntity> ordering =
-                    new EntityOrdering<>(entityManager, CoffeeEntity.class, BY_NAME, () -> searchableProperties);
-            return action.apply(new RsqlQueries<>(entityManager, CoffeeEntity.class, PARSER,
-                    () -> defaultQueryVisitor(CoffeeEntity.class),
-                    () -> defaultCountVisitor(CoffeeEntity.class),
-                    ordering, CursorCodec.DEFAULT, CursorKeyCodec.DEFAULT));
+            recordStatements();
+            RepositoryContext<CoffeeEntity> context = new TestContext<>(entityManager, BY_NAME, searchableProperties);
+            Criteria<CoffeeEntity> criteria = RsqlQueries.of(CoffeeEntity.class)
+                    .toCriteria(context, PARSER.parse(rsql), () -> RsqlQueries.defaultPredicateVisitor(CoffeeEntity.class));
+            return action.apply(context, criteria);
         });
     }
 
     @Test
-    @DisplayName("parses and executes a query")
-    void parsesAndExecutes() {
-        PaginationResult<CoffeeEntity> result = withQueries(queries -> queries.search(queries.parse("strength=ge=6"), Pageable.UNPAGED));
+    @DisplayName("translates a query into criteria the queries of the entity apply")
+    void translatesIntoCriteria() {
+        PaginationResult<CoffeeEntity> result = withCriteria("strength=ge=6", (context, criteria) ->
+                queries().search(context, null, criteria, Pageable.UNPAGED));
 
-        assertThat(Coffees.namesOf(result)).containsExactly(HARRAR, KONA, SIDAMO);
+        assertThat(namesOf(result)).containsExactly(HARRAR, KONA, SIDAMO);
     }
 
     @Test
     @DisplayName("orders the results with the ordering rules of the repository")
     void ordersWithTheRepositoryRules() {
-        PaginationResult<CoffeeEntity> result = withQueries(queries -> queries.search(parse("origin==" + ETHIOPIA), Pageable.of(0, 2, Sort.parse("-strength"))));
+        PaginationResult<CoffeeEntity> result = withCriteria("origin==" + ETHIOPIA, (context, criteria) ->
+                queries().search(context, null, criteria, Pageable.of(0, 2, Sort.parse("-strength"))));
 
-        assertThat(Coffees.namesOf(result)).containsExactly(HARRAR, SIDAMO);
+        assertThat(namesOf(result)).containsExactly(HARRAR, SIDAMO);
         assertThat(result.totalItems()).isEqualTo(3);
     }
 
     @Test
-    @DisplayName("counts distinct entities when the query joins a collection")
-    void countsDistinct() {
-        assertThat((long) withQueries(queries -> queries.count(parse("notes.flavour==Citrus"))))
+    @DisplayName("counts each entity once when the query joins a collection")
+    void countsEachEntityOnce() {
+        assertThat((long) withCriteria("notes.flavour==Citrus", (context, criteria) -> queries().count(context, null, criteria)))
                 .isEqualTo(3);
-        assertThat((long) withQueries(queries -> queries.count(parse("notes.flavour==Citrus,notes.flavour==Floral"))))
+        assertThat((long) withCriteria("notes.flavour==Citrus,notes.flavour==Floral", (context, criteria) -> queries().count(context, null, criteria)))
                 .as("Yirgacheffe has both notes and must be counted once")
                 .isEqualTo(4);
     }
 
     @Test
-    @DisplayName("detects a collection join, directly or through another join")
-    void detectsACollectionJoin() {
-        inTransaction(entityManager -> {
-            RsqlQueries<CoffeeEntity> queries = new RsqlQueries<>(
-                    entityManager,
-                    CoffeeEntity.class,
-                    PARSER,
-                    () -> defaultQueryVisitor(CoffeeEntity.class),
-                    () -> defaultCountVisitor(CoffeeEntity.class),
-                    new EntityOrdering<>(entityManager, CoffeeEntity.class, BY_NAME, Map::of),
-                    CursorCodec.DEFAULT,
-                    CursorKeyCodec.DEFAULT
-            );
-            CriteriaBuilder builder = entityManager.getCriteriaBuilder();
+    @DisplayName("moves a query joining a collection into a semi join, and not into a distinct")
+    void semiJoinsACollection() {
+        PaginationResult<CoffeeEntity> result = withCriteria("notes.flavour==Citrus,notes.flavour==Floral", (context, criteria) ->
+                queries().search(context, null, criteria, Pageable.of(0, 10, Sort.parse("roaster.name,name"))));
 
-            CriteriaQuery<CoffeeEntity> plain = builder.createQuery(CoffeeEntity.class);
-            plain.from(CoffeeEntity.class);
-            assertThat(queries.hasCollectionJoin(plain)).isFalse();
-
-            CriteriaQuery<CoffeeEntity> toOne = builder.createQuery(CoffeeEntity.class);
-            toOne.from(CoffeeEntity.class).join("roaster");
-            assertThat(queries.hasCollectionJoin(toOne)).isFalse();
-
-            CriteriaQuery<CoffeeEntity> toMany = builder.createQuery(CoffeeEntity.class);
-            toMany.from(CoffeeEntity.class).join("notes");
-            assertThat(queries.hasCollectionJoin(toMany)).isTrue();
-
-            CriteriaQuery<CoffeeEntity> nested = builder.createQuery(CoffeeEntity.class);
-            nested.from(CoffeeEntity.class).join("roaster").join("coffees");
-            assertThat(queries.hasCollectionJoin(nested)).as("a collection reached through a join counts").isTrue();
-
-            CriteriaQuery<Long> rootless = builder.createQuery(Long.class);
-            assertThat(queries.getRoot(rootless)).isEmpty();
-            assertThat(queries.hasCollectionJoin(rootless)).isFalse();
-            return null;
-        });
+        assertThat(namesOf(result))
+                .as("Kaldi Roasting first, then Moka Brothers, each by name")
+                .containsExactly(SIDAMO, YIRGACHEFFE, BOURBON_POINTU, GEISHA);
+        assertThat(statements())
+                .isNotEmpty()
+                .as("a select distinct cannot be ordered on the joined roaster on PostgreSQL and Oracle")
+                .noneMatch(sql -> sql.toLowerCase().contains("distinct"))
+                .as("the join on the notes was moved into a correlated exists subquery")
+                .allMatch(sql -> sql.toLowerCase().contains("exists"));
     }
 
     @Test
-    @DisplayName("applies the distinct on the search query")
-    void appliesTheDistinct() {
-        PaginationResult<CoffeeEntity> result = withQueries(queries -> queries.search(parse("notes.flavour==Citrus,notes.flavour==Floral"), Pageable.of(0, 10)));
-
-        assertThat(Coffees.namesOf(result)).doesNotHaveDuplicates().hasSize(4);
-    }
-
-    @Test
-    @DisplayName("appends the seek predicate to the restriction built by the visitor")
+    @DisplayName("appends the seek predicate to the criteria")
     void appendsTheSeekPredicate() {
-        CursorResult<CoffeeEntity> first = withQueries(queries -> queries.scroll(parse("roast==LIGHT"), Cursor.first(2, Sort.NONE)));
-        assertThat(Coffees.namesOf(first)).containsExactly(BOURBON_POINTU, GEISHA);
+        CursorResult<CoffeeEntity> first = withCriteria("roast==LIGHT", (context, criteria) ->
+                queries().scroll(context, null, criteria, Cursor.first(2, Sort.NONE)));
+        assertThat(namesOf(first)).containsExactly(BOURBON_POINTU, GEISHA);
 
-        CursorResult<CoffeeEntity> second = withQueries(queries -> queries.scroll(parse("roast==LIGHT"), Cursor.of(first.next(), 2, Sort.NONE)));
-        assertThat(Coffees.namesOf(second)).containsExactly(YIRGACHEFFE);
+        CursorResult<CoffeeEntity> second = withCriteria("roast==LIGHT", (context, criteria) ->
+                queries().scroll(context, null, criteria, Cursor.of(first.next(), 2, Sort.NONE)));
+        assertThat(namesOf(second)).containsExactly(YIRGACHEFFE);
         assertThat(second.hasPrevious()).isTrue();
     }
 
     @Test
     @DisplayName("rejects a query on an unknown property")
     void rejectsAnUnknownProperty() {
-        assertThatThrownBy(() -> withQueries(queries -> queries.count(parse("caffeine==high"))))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> withCriteria("caffeine==high", (context, criteria) -> queries().count(context, null, criteria)));
     }
 
     @Test
-    @DisplayName("rejects a query on a property that is not declared searchable")
+    @DisplayName("rejects a query on a property that is not declared searchable, as soon as it is translated")
     void rejectsANonSearchableProperty() {
         Map<String, String> searchable = Map.of("origin", "origin");
 
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> withQueries(searchable, queries -> queries.count(parse("strength=ge=5"))))
-                .withMessage("Cannot sort or filter on the unknown property strength");
+                .isThrownBy(() -> withCriteria(searchable, "strength=ge=5", (context, criteria) -> criteria))
+                .withMessage("Cannot sort or filter on unknown property strength");
     }
 
     @Test
@@ -187,10 +159,10 @@ class RsqlQueriesTest extends HibernateTest {
     void resolvesASearchablePropertyAlias() {
         Map<String, String> searchable = Map.of("country", "origin");
 
-        PaginationResult<CoffeeEntity> result =
-                withQueries(searchable, queries -> queries.search(parse("country==" + ETHIOPIA), Pageable.UNPAGED));
+        PaginationResult<CoffeeEntity> result = withCriteria(searchable, "country==" + ETHIOPIA, (context, criteria) ->
+                queries().search(context, null, criteria, Pageable.UNPAGED));
 
-        assertThat(Coffees.namesOf(result)).containsExactly(HARRAR, SIDAMO, YIRGACHEFFE);
+        assertThat(namesOf(result)).containsExactly(HARRAR, SIDAMO, YIRGACHEFFE);
     }
 
     @Test
@@ -198,7 +170,7 @@ class RsqlQueriesTest extends HibernateTest {
     void resolvesASearchablePropertyThroughANestedPath() {
         Map<String, String> searchable = Map.of("brewer", "roaster.name");
 
-        long count = withQueries(searchable, queries -> queries.count(parse("brewer==\"Moka Brothers\"")));
+        long count = withCriteria(searchable, "brewer==\"Moka Brothers\"", (context, criteria) -> queries().count(context, null, criteria));
 
         assertThat(count).isEqualTo(4);
     }

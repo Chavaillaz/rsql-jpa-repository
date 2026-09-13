@@ -9,6 +9,7 @@ import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.SIDA
 import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.YIRGACHEFFE;
 import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.namesOf;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import java.util.function.Function;
 
@@ -54,6 +55,28 @@ class CoffeeRsqlCursorTest extends HibernateTest {
         assertThat(namesOf(second)).containsExactly(YIRGACHEFFE);
         assertThat(second.hasNext()).isFalse();
         assertThat(second.hasPrevious()).isTrue();
+    }
+
+    @Test
+    @DisplayName("walks backward and gives back the very same first page")
+    void walksBackward() {
+        CursorResult<CoffeeEntity> first = searchPage("origin==" + ETHIOPIA, null, 2, Sort.NONE);
+        CursorResult<CoffeeEntity> second = searchPage("origin==" + ETHIOPIA, first.next(), 2, Sort.NONE);
+
+        CursorResult<CoffeeEntity> back = searchPage("origin==" + ETHIOPIA, second.previous(), 2, Sort.NONE);
+
+        assertThat(namesOf(back)).containsExactly(HARRAR, SIDAMO);
+        assertThat(back.hasPrevious()).isFalse();
+        assertThat(back.hasNext()).isTrue();
+    }
+
+    @Test
+    @DisplayName("rejects a nullable attribute as a cursor key, before a single row is read")
+    void rejectsANullableKey() {
+        assertThatIllegalArgumentException()
+                .as("a seek never matches a null key, so the rows carrying one would be dropped wherever the database sorts them")
+                .isThrownBy(() -> searchPage("origin==" + ETHIOPIA, null, 2, Sort.parse("decaf")))
+                .withMessageContaining("Cannot build a cursor on nullable property decafLabel");
     }
 
     @Test
