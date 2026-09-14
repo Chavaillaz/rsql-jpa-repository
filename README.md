@@ -97,7 +97,9 @@ cannot be navigated, such as `name.roaster.name`, or an argument its property ca
 `strength==strong`, an `IllegalArgumentException`: both are mistakes of the API consumer, to be answered with a
 `400 Bad Request`. So is an expression nesting its parentheses deeper than `AbstractRsqlRepository.MAX_NESTING_DEPTH`
 levels, refused with an `IllegalArgumentException` before the parser recurses into them, since a few kilobytes of
-parentheses are otherwise enough to overflow the stack.
+parentheses are otherwise enough to overflow the stack. So is a decimal argument whose scale lies beyond
+`RsqlQueries.MAX_DECIMAL_SCALE`, negative or positive, such as `price=lt=1e30000000`, which takes a few bytes to send
+but seconds for the database to bind.
 
 ## Combining with typed queries
 
@@ -121,13 +123,14 @@ instance to support a custom RSQL operator:
 @Override
 protected JpaPredicateVisitor<CoffeeEntity> createPredicateVisitor() {
     JpaPredicateVisitor<CoffeeEntity> visitor = RsqlQueries.defaultPredicateVisitor(CoffeeEntity.class);
-    // Customize the visitor here, such as with visitor.setBuilderTools(...)
+    // Customize the tools of the visitor here, such as with visitor.getBuilderTools().setPredicateBuilder(...)
     return visitor;
 }
 ```
 
 The visitor holds the root it builds its predicate on, and a query applies its criteria more than once, so return a
-new visitor at each call.
+new visitor at each call. Customize the builder tools the default visitor holds rather than replacing them: its
+argument parser refuses the arguments described above, which a parser of your own would have to refuse as well.
 
 A custom `RSQLParser`, supporting additional operators, can be passed to the `AbstractRsqlRepository` constructor:
 

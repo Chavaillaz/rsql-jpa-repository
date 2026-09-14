@@ -5,11 +5,13 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.function.Supplier;
 
 import com.github.tennaito.rsql.jpa.JpaPredicateVisitor;
 import com.github.tennaito.rsql.misc.ArgumentFormatException;
+import com.github.tennaito.rsql.misc.DefaultArgumentParser;
 import com.github.tennaito.rsql.misc.EntityManagerAdapter;
 import cz.jirutka.rsql.parser.ast.AndNode;
 import cz.jirutka.rsql.parser.ast.ComparisonNode;
@@ -18,6 +20,7 @@ import cz.jirutka.rsql.parser.ast.NoArgRSQLVisitorAdapter;
 import cz.jirutka.rsql.parser.ast.Node;
 import cz.jirutka.rsql.parser.ast.OrNode;
 import org.hibernate.query.sqm.TerminalPathException;
+import org.jspecify.annotations.Nullable;
 
 import com.chavaillaz.jakarta.persistence.repository.Criteria;
 import com.chavaillaz.jakarta.persistence.repository.EntityOrdering;
@@ -42,6 +45,14 @@ import com.chavaillaz.jakarta.persistence.repository.RepositoryContext;
 public class RsqlQueries<E> {
 
     /**
+     * The largest {@link BigDecimal#scale() scale}, negative or positive, a decimal argument may have, as many digits
+     * as the largest precision a PostgreSQL numeric column may be declared with. The database or its driver may spell
+     * a decimal out digit by digit to bind it, as H2 does, so that the few bytes of an argument such as
+     * {@code 1e30000000} would otherwise take seconds to bind, only for the database to refuse a value no column holds.
+     */
+    public static final int MAX_DECIMAL_SCALE = 1000;
+
+    /**
      * The RSQL support of each entity type, held in a {@link ClassValue} rather than in a map keyed by the class, so
      * that the cache cannot keep a class loader alive after a redeployment.
      */
@@ -53,6 +64,11 @@ public class RsqlQueries<E> {
         }
 
     };
+
+    /**
+     * The argument parser of the default visitor, shared since it holds no state.
+     */
+    private static final DefaultArgumentParser ARGUMENT_PARSER = new StrictArgumentParser();
 
     /**
      * The type of the managed entity.
@@ -104,6 +120,10 @@ public class RsqlQueries<E> {
 
     /**
      * Creates the default visitor converting an RSQL query node into a predicate on the managed entity.
+     * <p>
+     * Its argument parser refuses a decimal argument whose scale lies beyond {@value #MAX_DECIMAL_SCALE}, negative
+     * or positive, as an argument its property cannot be parsed from: customize the builder tools the visitor holds,
+     * rather than replacing them or their argument parser, to keep refusing it.
      *
      * @param <E>        The type of the managed entity
      * @param entityType The type of the managed entity
@@ -114,6 +134,7 @@ public class RsqlQueries<E> {
         // The visitor guesses its entity type from a generic varargs array, which the explicit type then replaces
         JpaPredicateVisitor<E> visitor = new JpaPredicateVisitor<>();
         visitor.setEntityClass(entityType);
+        visitor.getBuilderTools().setArgumentParser(ARGUMENT_PARSER);
         return visitor;
     }
 
@@ -242,6 +263,24 @@ public class RsqlQueries<E> {
         Root<E> matched = matching.from(entityType);
         Predicate predicate = node.accept(visitors.get().defineRoot(matched), adapter);
         return criteriaBuilder.exists(matching.select(criteriaBuilder.literal(1)).where(criteriaBuilder.equal(matched, root), predicate));
+    }
+
+    /**
+     * Parses the arguments of the comparisons as rsql-jpa does, refusing those an API consumer can send but no query
+     * should run with, as arguments their property cannot be parsed from.
+     */
+    private static final class StrictArgumentParser extends DefaultArgumentParser {
+
+        @Override
+        public <T> @Nullable T parse(String argument, Class<T> type) {
+            T value = super.parse(argument, type);
+            if (value instanceof BigDecimal decimal && Math.abs((long) decimal.scale()) > MAX_DECIMAL_SCALE) {
+                // The few bytes of 1e30000000 took H2 some 37 seconds to bind, see MAX_DECIMAL_SCALE
+                throw new ArgumentFormatException(argument, type);
+            }
+            return value;
+        }
+
     }
 
 }

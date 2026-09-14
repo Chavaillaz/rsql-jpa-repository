@@ -35,6 +35,7 @@ import com.chavaillaz.jakarta.persistence.repository.example.Roast;
 import com.chavaillaz.jakarta.persistence.repository.example.RoasterEntity;
 import com.chavaillaz.jakarta.persistence.repository.example.TastingNoteEntity;
 import com.chavaillaz.jakarta.persistence.repository.rsql.AbstractRsqlRepository;
+import com.chavaillaz.jakarta.persistence.repository.rsql.RsqlQueries;
 
 @DisplayName("Searching the coffee menu with an RSQL query")
 class CoffeeRsqlSearchTest extends HibernateTest {
@@ -215,6 +216,24 @@ class CoffeeRsqlSearchTest extends HibernateTest {
                 .withMessageContaining("Cannot cast");
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> searchAll(rsql));
+    }
+
+    @Test
+    @DisplayName("rejects a decimal argument the database would take seconds to bind, as the illegal argument a consumer sent")
+    void rejectsADecimalWithAnOutsizedScale() {
+        int limit = RsqlQueries.MAX_DECIMAL_SCALE;
+
+        assertThat(countAll("price=lt=1e" + limit)).isEqualTo(7);
+        assertThat(countAll("price=gt=1e-" + limit)).isEqualTo(7);
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> countAll("price=lt=1e" + (limit + 1)))
+                .withMessage("Cannot cast '1e%d' to type class java.math.BigDecimal", limit + 1);
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> countAll("price=gt=1e-" + (limit + 1)))
+                .withMessage("Cannot cast '1e-%d' to type class java.math.BigDecimal", limit + 1);
+        assertThatIllegalArgumentException()
+                .as("H2 spent some 37 seconds binding such a decimal, only to refuse it")
+                .isThrownBy(() -> searchAll("price=in=(10,1e30000000)"));
     }
 
     @Test

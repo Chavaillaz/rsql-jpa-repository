@@ -181,7 +181,8 @@ public abstract class AbstractRsqlRepository<E extends Identifiable<I>, I> exten
      * {@link RsqlQueries#toCriteria(com.chavaillaz.jakarta.persistence.repository.RepositoryContext, Node, java.util.function.Supplier)}.
      * <p>
      * Override to customize the property mapping, the argument parsing or the predicate building, through the
-     * builder tools of the visitor.
+     * builder tools of the visitor. Start from {@link RsqlQueries#defaultPredicateVisitor(Class)} and customize the
+     * tools it holds rather than replacing them, so that the arguments its parser refuses stay refused.
      *
      * @return The visitor to use to build the predicate
      */
