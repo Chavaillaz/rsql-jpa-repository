@@ -23,6 +23,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.chavaillaz.jakarta.persistence.repository.Criteria;
 import com.chavaillaz.jakarta.persistence.repository.Cursor;
@@ -150,6 +152,19 @@ class RsqlQueriesTest extends HibernateTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> withCriteria("name.origin==" + ETHIOPIA, (context, criteria) -> queries().count(context, null, criteria)))
                 .withMessageContaining("has no attribute 'origin'");
+    }
+
+    /**
+     * The visitor joins an association from the path it last stepped into, which is neither the basic attribute of
+     * the first selector nor the to-one association of the notes the second one reaches the roaster through.
+     */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"name.roaster.name", "notes.coffee.roaster.name"})
+    @DisplayName("rejects a selector the visitor cannot navigate, as the illegal argument a consumer sent")
+    void rejectsASelectorTheVisitorCannotNavigate(String selector) {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> withCriteria(selector + "==Kaldi", (context, criteria) -> queries().count(context, null, criteria)))
+                .withMessage("Cannot filter on property " + selector);
     }
 
     @Test

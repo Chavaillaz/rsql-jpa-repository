@@ -92,9 +92,10 @@ children is therefore returned and counted once, without the `distinct` PostgreS
 joined attribute, and an entity with no associated row still matches the other alternatives of an OR, such as
 `roaster.name=="Kaldi Roasting",origin==Ethiopia` for a coffee from Ethiopia having no roaster.
 
-A malformed expression raises the `RSQLParserException` of the parser, and a selector that is not searchable, or an
-argument its property cannot be parsed from, such as `strength==strong`, an `IllegalArgumentException`: both are
-mistakes of the API consumer, to be answered with a `400 Bad Request`.
+A malformed expression raises the `RSQLParserException` of the parser, and a selector that is not searchable or that
+cannot be navigated, such as `name.roaster.name`, or an argument its property cannot be parsed from, such as
+`strength==strong`, an `IllegalArgumentException`: both are mistakes of the API consumer, to be answered with a
+`400 Bad Request`.
 
 ## Combining with typed queries
 

@@ -165,9 +165,9 @@ public class RsqlQueries<E> {
      * visitor holds the root it builds on: a visitor is therefore taken from the given provider for each comparison
      * at each application.
      * <p>
-     * An argument the visitor cannot parse for the type of its property, or a selector reaching through a basic
-     * attribute, is a malformed filter sent by an API consumer: the criteria raise it as an
-     * {@link IllegalArgumentException} when applied, which a query does before issuing any statement.
+     * An argument the visitor cannot parse for the type of its property, or a selector it cannot navigate, such as
+     * one reaching through a basic attribute, is a malformed filter sent by an API consumer: the criteria raise it
+     * as an {@link IllegalArgumentException} when applied, which a query does before issuing any statement.
      *
      * @param context  The repository the query is written for
      * @param rsqlNode The parsed RSQL query
@@ -180,33 +180,38 @@ public class RsqlQueries<E> {
         Node resolved = resolveProperties(context, rsqlNode);
         return (criteriaBuilder, query, root) -> {
             EntityManagerAdapter adapter = new EntityManagerAdapter(context.entityManager()::getMetamodel, () -> criteriaBuilder);
-            try {
-                return resolved.accept(new NoArgRSQLVisitorAdapter<Predicate>() {
+            return resolved.accept(new NoArgRSQLVisitorAdapter<Predicate>() {
 
-                    @Override
-                    public Predicate visit(AndNode node) {
-                        return criteriaBuilder.and(combine(node));
-                    }
+                @Override
+                public Predicate visit(AndNode node) {
+                    return criteriaBuilder.and(combine(node));
+                }
 
-                    @Override
-                    public Predicate visit(OrNode node) {
-                        return criteriaBuilder.or(combine(node));
-                    }
+                @Override
+                public Predicate visit(OrNode node) {
+                    return criteriaBuilder.or(combine(node));
+                }
 
-                    @Override
-                    public Predicate visit(ComparisonNode node) {
+                @Override
+                public Predicate visit(ComparisonNode node) {
+                    try {
                         return compare(node, criteriaBuilder, query, root, adapter, visitors);
+                    } catch (ArgumentFormatException | TerminalPathException e) {
+                        // An unparsable argument, or a selector reaching through a basic attribute such as name.origin,
+                        // which the API layer answers with a 400 only as an IllegalArgumentException
+                        throw new IllegalArgumentException(e.getMessage(), e);
+                    } catch (ClassCastException e) {
+                        // The visitor joins an association from whichever path it last stepped into, which is no join
+                        // past a basic attribute, such as name.roaster.name, nor past the to-one association of a join,
+                        // such as notes.coffee.roaster.name; the JVM omits the message of a cast failing that often
+                        throw new IllegalArgumentException("Cannot filter on property " + node.getSelector(), e);
                     }
+                }
 
-                    private Predicate[] combine(LogicalNode node) {
-                        return node.getChildren().stream().map(child -> child.accept(this)).toArray(Predicate[]::new);
-                    }
-                });
-            } catch (ArgumentFormatException | TerminalPathException e) {
-                // An unparsable argument, or a selector reaching through a basic attribute such as name.origin, which
-                // the API layer answers with a 400 only as an IllegalArgumentException
-                throw new IllegalArgumentException(e.getMessage(), e);
-            }
+                private Predicate[] combine(LogicalNode node) {
+                    return node.getChildren().stream().map(child -> child.accept(this)).toArray(Predicate[]::new);
+                }
+            });
         };
     }
 
