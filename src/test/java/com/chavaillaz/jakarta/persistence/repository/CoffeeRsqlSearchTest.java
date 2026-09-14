@@ -218,6 +218,32 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     }
 
     @Test
+    @DisplayName("rejects a query nesting its parentheses too deeply, before the parser recurses into them")
+    void rejectsADeeplyNestedQuery() {
+        int limit = AbstractRsqlRepository.MAX_NESTING_DEPTH;
+        String origin = "origin==" + ETHIOPIA;
+
+        assertThat(countAll("(".repeat(limit) + origin + ")".repeat(limit))).isEqualTo(3);
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> countAll("(".repeat(limit + 1) + origin + ")".repeat(limit + 1)))
+                .withMessage("Cannot filter with an RSQL query nesting its parentheses deeper than %d levels", limit);
+        assertThatIllegalArgumentException()
+                .as("a few thousand parentheses would overflow the stack of the parser")
+                .isThrownBy(() -> searchAll("(".repeat(10_000) + origin + ")".repeat(10_000)));
+    }
+
+    @Test
+    @DisplayName("counts no parenthesis of a quoted argument towards the nesting of a query")
+    void ignoresTheParenthesesOfAQuotedArgument() {
+        String parentheses = "(".repeat(AbstractRsqlRepository.MAX_NESTING_DEPTH + 1);
+
+        assertThat(countAll("name=='" + parentheses + "'")).isZero();
+        assertThat(countAll("name==\"\\\"" + parentheses + "\""))
+                .as("a quote escaped within a quoted argument closes nothing")
+                .isZero();
+    }
+
+    @Test
     @DisplayName("resolves a searchable property to the entity attribute path it is aliased to")
     void resolvesAnAliasedPropertyForFiltering() {
         assertThat(countAll("roaster==\"Moka Brothers\"")).isEqualTo(4);

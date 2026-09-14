@@ -95,16 +95,19 @@ joined attribute, and an entity with no associated row still matches the other a
 A malformed expression raises the `RSQLParserException` of the parser, and a selector that is not searchable or that
 cannot be navigated, such as `name.roaster.name`, or an argument its property cannot be parsed from, such as
 `strength==strong`, an `IllegalArgumentException`: both are mistakes of the API consumer, to be answered with a
-`400 Bad Request`.
+`400 Bad Request`. So is an expression nesting its parentheses deeper than `AbstractRsqlRepository.MAX_NESTING_DEPTH`
+levels, refused with an `IllegalArgumentException` before the parser recurses into them, since a few kilobytes of
+parentheses are otherwise enough to overflow the stack.
 
 ## Combining with typed queries
 
-`toCriteria(Node)` translates a parsed, non-blank RSQL query into that very `Criteria`, so that a repository method
-can combine it with a `Restriction` or criteria of its own, such as a scope the API consumers must not escape:
+`toCriteria(Node)` translates a non-blank RSQL query, parsed by `parse(String)` within that nesting limit, into that
+very `Criteria`, so that a repository method can combine it with a `Restriction` or criteria of its own, such as a
+scope the API consumers must not escape:
 
 ```java
 public PaginationResult<CoffeeEntity> searchFromOrigin(String origin, String rsql, Pageable pageable) {
-    return search(Restriction.equal(CoffeeEntity_.origin, origin), toCriteria(rsqlParser.parse(rsql)), pageable);
+    return search(Restriction.equal(CoffeeEntity_.origin, origin), toCriteria(parse(rsql)), pageable);
 }
 ```
 
