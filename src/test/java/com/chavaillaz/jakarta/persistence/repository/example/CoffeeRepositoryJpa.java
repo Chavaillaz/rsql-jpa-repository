@@ -58,6 +58,7 @@ public class CoffeeRepositoryJpa extends AbstractRsqlRepository<CoffeeEntity, Lo
                 "roast", "roast",
                 "price", "price",
                 "strength", "strength",
+                "organic", "organic",
                 "decaf", "decafLabel",
                 "roaster", "roaster.name",
                 "notes", "notes.flavour");

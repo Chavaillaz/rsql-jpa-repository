@@ -51,6 +51,8 @@ public class CoffeeEntity implements Identifiable<Long> {
     @Column(nullable = false)
     private int strength;
 
+    private boolean organic;
+
     private Instant roastedAt;
 
     /**

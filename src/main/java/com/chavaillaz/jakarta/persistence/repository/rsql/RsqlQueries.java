@@ -121,9 +121,10 @@ public class RsqlQueries<E> {
     /**
      * Creates the default visitor converting an RSQL query node into a predicate on the managed entity.
      * <p>
-     * Its argument parser refuses a decimal argument whose scale lies beyond {@value #MAX_DECIMAL_SCALE}, negative
-     * or positive, as an argument its property cannot be parsed from: customize the builder tools the visitor holds,
-     * rather than replacing them or their argument parser, to keep refusing it.
+     * Its argument parser refuses, as arguments their property cannot be parsed from, a decimal whose scale lies
+     * beyond {@value #MAX_DECIMAL_SCALE}, negative or positive, and a boolean other than {@code true} or
+     * {@code false}, whatever its case, which rsql-jpa silently reads as {@code false}: customize the builder tools
+     * the visitor holds, rather than replacing them or their argument parser, to keep refusing them.
      *
      * @param <E>        The type of the managed entity
      * @param entityType The type of the managed entity
@@ -274,6 +275,10 @@ public class RsqlQueries<E> {
         @Override
         public <T> @Nullable T parse(String argument, Class<T> type) {
             T value = super.parse(argument, type);
+            if (value instanceof Boolean && !"true".equalsIgnoreCase(argument) && !"false".equalsIgnoreCase(argument)) {
+                // Boolean#valueOf reads any other text as false, turning organic==yes into its very opposite
+                throw new ArgumentFormatException(argument, type);
+            }
             if (value instanceof BigDecimal decimal && Math.abs((long) decimal.scale()) > MAX_DECIMAL_SCALE) {
                 // The few bytes of 1e30000000 took H2 some 37 seconds to bind, see MAX_DECIMAL_SCALE
                 throw new ArgumentFormatException(argument, type);

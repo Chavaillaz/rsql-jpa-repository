@@ -237,6 +237,19 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     }
 
     @Test
+    @DisplayName("reads a boolean argument from true or false only, rather than silently reading anything else as false")
+    void rejectsABooleanOtherThanTrueOrFalse() {
+        assertThat(countAll("organic==true")).isEqualTo(3);
+        assertThat(countAll("organic==FALSE")).as("whatever its case").isEqualTo(4);
+        assertThatIllegalArgumentException()
+                .as("Boolean#valueOf would read it as false, matching the coffees that are not organic")
+                .isThrownBy(() -> countAll("organic==yes"))
+                .withMessage("Cannot cast 'yes' to type class java.lang.Boolean");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> searchAll("organic=in=(true,1)"));
+    }
+
+    @Test
     @DisplayName("rejects a query nesting its parentheses too deeply, before the parser recurses into them")
     void rejectsADeeplyNestedQuery() {
         int limit = AbstractRsqlRepository.MAX_NESTING_DEPTH;

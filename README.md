@@ -99,7 +99,8 @@ cannot be navigated, such as `name.roaster.name`, or an argument its property ca
 levels, refused with an `IllegalArgumentException` before the parser recurses into them, since a few kilobytes of
 parentheses are otherwise enough to overflow the stack. So is a decimal argument whose scale lies beyond
 `RsqlQueries.MAX_DECIMAL_SCALE`, negative or positive, such as `price=lt=1e30000000`, which takes a few bytes to send
-but seconds for the database to bind.
+but seconds for the database to bind. A boolean argument is read from `true` or `false` only, whatever its case, so
+that `organic==yes` is refused rather than silently read as `false`.
 
 ## Combining with typed queries
 

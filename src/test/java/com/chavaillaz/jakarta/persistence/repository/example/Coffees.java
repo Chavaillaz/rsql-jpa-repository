@@ -83,6 +83,7 @@ public final class Coffees {
 
         coffees.forEach(coffee -> {
             coffee.setRoaster(ETHIOPIA.equals(coffee.getOrigin()) ? kaldi : moka);
+            coffee.setOrganic(coffee.getRoaster() == kaldi);
             entityManager.persist(coffee);
         });
         entityManager.flush();
