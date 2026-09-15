@@ -5,7 +5,9 @@ import static jakarta.persistence.EnumType.STRING;
 import static jakarta.persistence.FetchType.LAZY;
 import static jakarta.persistence.GenerationType.IDENTITY;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -67,11 +69,26 @@ public class CoffeeEntity implements Identifiable<Long> {
     @OneToMany(mappedBy = "coffee", cascade = ALL, orphanRemoval = true)
     private List<TastingNoteEntity> notes = new ArrayList<>();
 
+    /**
+     * The origins of a blend, an element collection the RSQL visitor reaches through without joining it.
+     */
+    @ElementCollection
+    @CollectionTable(name = "coffee_blend")
+    private List<BlendComponent> blend = new ArrayList<>();
+
     public CoffeeEntity addNote(String flavour) {
         TastingNoteEntity note = new TastingNoteEntity();
         note.setFlavour(flavour);
         note.setCoffee(this);
         notes.add(note);
+        return this;
+    }
+
+    public CoffeeEntity addBlend(String origin, int share) {
+        BlendComponent component = new BlendComponent();
+        component.setOrigin(origin);
+        component.setShare(share);
+        blend.add(component);
         return this;
     }
 

@@ -7,6 +7,7 @@ import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.HARR
 import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.KONA;
 import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.SIDAMO;
 import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.YIRGACHEFFE;
+import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.coffee;
 import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.namesOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
@@ -123,6 +124,32 @@ class RsqlQueriesTest extends HibernateTest {
                 .as("a select distinct cannot be ordered on the joined roaster on PostgreSQL and Oracle")
                 .noneMatch(sql -> sql.toLowerCase().contains("distinct"))
                 .as("the join on the notes was moved into a correlated exists subquery")
+                .allMatch(sql -> sql.toLowerCase().contains("exists"));
+    }
+
+    /**
+     * The visitor looks the origin reached through the blend up on the coffee, which has one too, and navigates the
+     * blend with a plain path rather than a join, Hibernate then joining the collection table implicitly.
+     */
+    @Test
+    @DisplayName("moves a query reaching through an element collection into a semi join, keeping the entities without elements")
+    void semiJoinsAnElementCollection() {
+        persist(coffee("Espresso Blend").addBlend("Brazil", 60).addBlend(ETHIOPIA, 40));
+
+        PaginationResult<CoffeeEntity> blends = withCriteria("blend.origin=in=(Brazil," + ETHIOPIA + ")", (context, criteria) ->
+                queries().search(context, null, criteria, Pageable.of(0, 10)));
+        assertThat(namesOf(blends)).as("both origins of the blend match, and its coffee is returned once").containsExactly("Espresso Blend");
+        assertThat(blends.totalItems()).isOne();
+
+        PaginationResult<CoffeeEntity> alternatives = withCriteria("blend.origin==Brazil,name==" + GEISHA, (context, criteria) ->
+                queries().search(context, null, criteria, Pageable.of(0, 10)));
+        assertThat(namesOf(alternatives))
+                .as("Geisha blends nothing, which must not keep its name from matching")
+                .containsExactly("Espresso Blend", GEISHA);
+        assertThat(alternatives.totalItems()).isEqualTo(2);
+        assertThat(statements())
+                .isNotEmpty()
+                .as("the blend was moved into a correlated exists subquery")
                 .allMatch(sql -> sql.toLowerCase().contains("exists"));
     }
 

@@ -2,9 +2,11 @@ package com.chavaillaz.jakarta.persistence.repository.rsql;
 
 import jakarta.persistence.criteria.CommonAbstractCriteria;
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
+import jakarta.persistence.metamodel.PluralAttribute;
 import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
@@ -12,6 +14,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 import com.github.tennaito.rsql.jpa.JpaPredicateVisitor;
+import com.github.tennaito.rsql.jpa.PredicateBuilder;
 import com.github.tennaito.rsql.misc.ArgumentFormatException;
 import com.github.tennaito.rsql.misc.DefaultArgumentParser;
 import com.github.tennaito.rsql.misc.EntityManagerAdapter;
@@ -191,10 +194,12 @@ public class RsqlQueries<E> {
      * Translates an RSQL query into criteria, its selectors being resolved against the searchable properties on
      * the spot, and its predicate being built on whichever root a query applies the criteria to.
      * <p>
-     * The visitor inner joins the association a selector reaches through, which drops the entities having no
-     * associated row before any predicate is evaluated, keeping them from matching another alternative of an OR. A
-     * comparison joining anything is therefore evaluated in a correlated {@code exists} subquery of its own, where
-     * the join only restricts that comparison, the logical nodes being combined here rather than by the visitor.
+     * The visitor inner joins the association a selector reaches through, and Hibernate implicitly joins a collection
+     * the visitor reaches through with a plain path, such as an element collection, both of which drop the entities
+     * having no associated row before any predicate is evaluated, keeping them from matching another alternative of
+     * an OR, and repeat an entity for each matching element. A comparison joining anything or reaching through a
+     * collection is therefore evaluated in a correlated {@code exists} subquery of its own, where the join only
+     * restricts that comparison, the logical nodes being combined here rather than by the visitor.
      * <p>
      * A query applies criteria more than once, first to a throwaway root, see {@link Criteria#toPredicate}, and a
      * visitor holds the root it builds on: a visitor is therefore taken from the given provider for each comparison
@@ -252,10 +257,11 @@ public class RsqlQueries<E> {
 
     /**
      * Builds the predicate of a single comparison, in a correlated {@code exists} subquery of its own when it joins
-     * anything, see {@link #toCriteria(RepositoryContext, Node, Supplier)}.
+     * anything or reaches through a collection, see {@link #toCriteria(RepositoryContext, Node, Supplier)}.
      * <p>
      * What the visitor joins is only known once it is applied, so the comparison is first applied to a throwaway
-     * root, which issues no query.
+     * root, which issues no query, a collection it reaches through without joining it only showing in the path it
+     * navigates on that root.
      *
      * @param node            The comparison to build the predicate of
      * @param criteriaBuilder The builder to use
@@ -267,8 +273,9 @@ public class RsqlQueries<E> {
      */
     private Predicate compare(ComparisonNode node, CriteriaBuilder criteriaBuilder, CommonAbstractCriteria query, Root<E> root, EntityManagerAdapter adapter, Supplier<? extends JpaPredicateVisitor<E>> visitors) {
         Root<E> probe = criteriaBuilder.createQuery(entityType).from(entityType);
-        node.accept(visitors.get().defineRoot(probe), adapter);
-        if (probe.getJoins().isEmpty()) {
+        JpaPredicateVisitor<E> visitor = visitors.get();
+        node.accept(visitor.defineRoot(probe), adapter);
+        if (probe.getJoins().isEmpty() && !reachesThroughCollection(PredicateBuilder.findPropertyPath(node.getSelector(), probe, adapter, visitor.getBuilderTools()))) {
             return node.accept(visitors.get().defineRoot(root), adapter);
         }
 
@@ -277,6 +284,22 @@ public class RsqlQueries<E> {
         Root<E> matched = matching.from(entityType);
         Predicate predicate = node.accept(visitors.get().defineRoot(matched), adapter);
         return criteriaBuilder.exists(matching.select(criteriaBuilder.literal(1)).where(criteriaBuilder.equal(matched, root), predicate));
+    }
+
+    /**
+     * Checks whether a path is reached through a collection, which the visitor navigates with a plain path rather
+     * than a join when it is no association, such as an element collection, Hibernate then joining it implicitly.
+     *
+     * @param path The path a comparison is made on
+     * @return {@code true} if a path it is reached through is a collection, {@code false} otherwise
+     */
+    private static boolean reachesThroughCollection(Path<?> path) {
+        for (Path<?> parent = path.getParentPath(); parent != null; parent = parent.getParentPath()) {
+            if (parent.getModel() instanceof PluralAttribute) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

@@ -86,11 +86,11 @@ attribute of the entity is reachable as is, nested and collection properties inc
 
 An RSQL query is translated into a `Criteria` of the base library, which the repository applies exactly as one
 written by hand: a cursor query checks its ordering keys the same way, refusing a nullable one before the first page
-is read. Each comparison reaching through an association, such as `notes.flavour==Citrus`, is evaluated in a
-correlated `exists` subquery of its own rather than joined by the query itself. An entity with several matching
-children is therefore returned and counted once, without the `distinct` PostgreSQL and Oracle refuse to order on a
-joined attribute, and an entity with no associated row still matches the other alternatives of an OR, such as
-`roaster.name=="Kaldi Roasting",origin==Ethiopia` for a coffee from Ethiopia having no roaster.
+is read. Each comparison reaching through an association or a collection, such as `notes.flavour==Citrus`, is
+evaluated in a correlated `exists` subquery of its own rather than joined by the query itself. An entity with several
+matching children is therefore returned and counted once, without the `distinct` PostgreSQL and Oracle refuse to
+order on a joined attribute, and an entity with no associated row still matches the other alternatives of an OR,
+such as `roaster.name=="Kaldi Roasting",origin==Ethiopia` for a coffee from Ethiopia having no roaster.
 
 A malformed expression raises the `RSQLParserException` of the parser, and a selector that is not searchable or that
 cannot be navigated, such as `name.roaster.name`, or an argument its property cannot be parsed from, such as
