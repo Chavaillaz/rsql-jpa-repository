@@ -237,6 +237,20 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     }
 
     @Test
+    @DisplayName("rejects a decimal argument too long for its digits to be parsed in reasonable time, as the illegal argument a consumer sent")
+    void rejectsADecimalTooLongToParse() {
+        String digits = "9".repeat(RsqlQueries.MAX_DECIMAL_LENGTH);
+
+        assertThat(countAll("price=lt=" + digits)).isEqualTo(7);
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> countAll("price=lt=" + digits + "9"))
+                .withMessage("Cannot cast '%s9' to type class java.math.BigDecimal", digits);
+        assertThatIllegalArgumentException()
+                .as("the JDK parses the digits of a decimal in quadratic time, and a search parses its arguments four times")
+                .isThrownBy(() -> searchAll("price=gt=" + "1".repeat(100_000)));
+    }
+
+    @Test
     @DisplayName("reads a boolean argument from true or false only, rather than silently reading anything else as false")
     void rejectsABooleanOtherThanTrueOrFalse() {
         assertThat(countAll("organic==true")).isEqualTo(3);

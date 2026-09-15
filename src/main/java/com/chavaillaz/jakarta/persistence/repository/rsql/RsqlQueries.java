@@ -53,6 +53,15 @@ public class RsqlQueries<E> {
     public static final int MAX_DECIMAL_SCALE = 1000;
 
     /**
+     * The largest number of characters a decimal argument may be written with, twice {@link #MAX_DECIMAL_SCALE}, enough
+     * to spell out any value a numeric column may be declared to hold. The JDK parses the digits of a decimal in
+     * quadratic time, and a query parses each argument four times, so that the quarter of a megabyte of digits a
+     * consumer is free to send in the body of a request would otherwise take some 5 seconds to parse, only for H2 to
+     * refuse the value.
+     */
+    public static final int MAX_DECIMAL_LENGTH = 2 * MAX_DECIMAL_SCALE;
+
+    /**
      * The RSQL support of each entity type, held in a {@link ClassValue} rather than in a map keyed by the class, so
      * that the cache cannot keep a class loader alive after a redeployment.
      */
@@ -121,10 +130,11 @@ public class RsqlQueries<E> {
     /**
      * Creates the default visitor converting an RSQL query node into a predicate on the managed entity.
      * <p>
-     * Its argument parser refuses, as arguments their property cannot be parsed from, a decimal whose scale lies
-     * beyond {@value #MAX_DECIMAL_SCALE}, negative or positive, and a boolean other than {@code true} or
-     * {@code false}, whatever its case, which rsql-jpa silently reads as {@code false}: customize the builder tools
-     * the visitor holds, rather than replacing them or their argument parser, to keep refusing them.
+     * Its argument parser refuses, as arguments their property cannot be parsed from, a decimal written with more
+     * than {@value #MAX_DECIMAL_LENGTH} characters or whose scale lies beyond {@value #MAX_DECIMAL_SCALE}, negative or
+     * positive, and a boolean other than {@code true} or {@code false}, whatever its case, which rsql-jpa silently
+     * reads as {@code false}: customize the builder tools the visitor holds, rather than replacing them or their
+     * argument parser, to keep refusing them.
      *
      * @param <E>        The type of the managed entity
      * @param entityType The type of the managed entity
@@ -274,6 +284,10 @@ public class RsqlQueries<E> {
 
         @Override
         public <T> @Nullable T parse(String argument, Class<T> type) {
+            if (type.equals(BigDecimal.class) && argument.length() > MAX_DECIMAL_LENGTH) {
+                // Refused before being parsed, which takes quadratic time in its digits, see MAX_DECIMAL_LENGTH
+                throw new ArgumentFormatException(argument, type);
+            }
             T value = super.parse(argument, type);
             if (value instanceof Boolean && !"true".equalsIgnoreCase(argument) && !"false".equalsIgnoreCase(argument)) {
                 // Boolean#valueOf reads any other text as false, turning organic==yes into its very opposite
