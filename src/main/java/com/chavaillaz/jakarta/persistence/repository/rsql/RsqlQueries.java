@@ -41,8 +41,8 @@ import com.chavaillaz.jakarta.persistence.repository.RepositoryContext;
  * {@link EntityQueries queries} of the entity apply like any other.
  * <p>
  * The predicate is built on the root each query hands over, so that a cursor query checks and selects its keys
- * exactly as for criteria written by hand, and each comparison reaching through an association is evaluated in a
- * correlated {@code exists} subquery of its own. Every selector is first
+ * exactly as for criteria written by hand, and each comparison joining an association or reaching through a
+ * collection is evaluated in a correlated {@code exists} subquery of its own. Every selector is first
  * {@link #resolveProperties(RepositoryContext, Node) resolved} against the searchable properties of the repository,
  * so that the very same restriction and public naming govern the filtering and the sorting.
  * <p>
@@ -139,13 +139,15 @@ public class RsqlQueries<E> {
     /**
      * Creates the default visitor converting an RSQL query node into a predicate on the managed entity.
      * <p>
-     * Its argument parser refuses, as arguments their property cannot be parsed from, a decimal written with more
-     * than {@value #MAX_DECIMAL_LENGTH} characters or whose scale lies beyond {@value #MAX_DECIMAL_SCALE}, negative or
-     * positive, a boolean other than {@code true} or {@code false}, whatever its case, which rsql-jpa silently reads as
-     * {@code false}, a {@link Date} not written as {@code yyyy-MM-dd} or {@code yyyy-MM-dd'T'HH:mm:ss}, which rsql-jpa
-     * reads leniently, and any argument compared to a collection as a whole, {@code null} included, which rsql-jpa
-     * reads before even looking at the type of the property: customize the builder tools the visitor holds, rather
-     * than replacing them or their argument parser, to keep refusing them.
+     * Its argument parser refuses, as arguments their property cannot be parsed from, any argument compared to a
+     * collection as a whole, {@code null} included, which rsql-jpa reads before even looking at the type of the
+     * property, and a decimal written with more than {@value #MAX_DECIMAL_LENGTH} characters or whose scale lies
+     * beyond {@value #MAX_DECIMAL_SCALE}, negative or positive. It also refuses a boolean other than {@code true} or
+     * {@code false}, whatever its case, which rsql-jpa silently reads as {@code false}, and a {@link Date} not
+     * written as {@code yyyy-MM-dd} or {@code yyyy-MM-dd'T'HH:mm:ss}, which rsql-jpa reads leniently.
+     * <p>
+     * Customize the builder tools the visitor holds, rather than replacing them or their argument parser, so that
+     * those arguments stay refused.
      *
      * @param <E>        The type of the managed entity
      * @param entityType The type of the managed entity
@@ -265,7 +267,7 @@ public class RsqlQueries<E> {
      * anything or reaches through a collection, see {@link #toCriteria(RepositoryContext, Node, Supplier)}.
      * <p>
      * What the visitor joins is only known once it is applied, so the comparison is first applied to a throwaway
-     * root, which issues no query, a collection it reaches through without joining it only showing in the path it
+     * root, which issues no query. A collection it reaches through without joining it only shows in the path it
      * navigates on that root, as the type of the property it compares does.
      * <p>
      * rsql-jpa compares a date with a between, whose bound it moves a whole day away for an exclusive comparison: such
@@ -341,7 +343,7 @@ public class RsqlQueries<E> {
      * than a join when it is no association, such as an element collection, Hibernate then joining it implicitly.
      *
      * @param path The path a comparison is made on
-     * @return {@code true} if a path it is reached through is a collection, {@code false} otherwise
+     * @return {@code true} if one of the paths it is reached through is a collection, {@code false} otherwise
      */
     private static boolean reachesThroughCollection(Path<?> path) {
         for (Path<?> parent = path.getParentPath(); parent != null; parent = parent.getParentPath()) {

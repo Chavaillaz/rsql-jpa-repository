@@ -127,7 +127,7 @@ public interface RsqlRepository<E extends Identifiable<I>, I> extends Repository
      * Scrolls through the entities matching the given RSQL filter expression, seeking to the requested position
      * instead of skipping the preceding rows.
      *
-     * @param rsql   The RSQL query, all the entities being scrolled through when blank
+     * @param rsql   The RSQL filter expression, {@code null} or blank to match all the entities
      * @param cursor The opaque position of the previous page, {@code null} or blank to request the first page
      * @param size   The number of items per page, or {@code null} to apply {@link Cursor#DEFAULT_SIZE}
      * @param sort   The requested ordering, {@link Sort#NONE} to apply the default ordering of the repository

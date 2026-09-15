@@ -306,8 +306,7 @@ class CoffeeRsqlSearchTest extends HibernateTest {
 
     /**
      * Overrides {@code count(Node)} to prove {@link AbstractRsqlRepository#count(String)} actually routes through
-     * it, rather than bypassing it by calling {@link com.chavaillaz.jakarta.persistence.repository.rsql.RsqlQueries#count(Node)}
-     * directly.
+     * it, rather than bypassing it by calling {@link EntityQueries#count} directly.
      */
     private static class CountingRepositoryJpa extends CoffeeRepositoryJpa {
 
