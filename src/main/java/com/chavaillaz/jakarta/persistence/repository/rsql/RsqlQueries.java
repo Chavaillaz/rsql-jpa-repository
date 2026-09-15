@@ -8,8 +8,11 @@ import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import jakarta.persistence.metamodel.PluralAttribute;
 import java.math.BigDecimal;
+import java.text.SimpleDateFormat;
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -138,9 +141,10 @@ public class RsqlQueries<E> {
      * Its argument parser refuses, as arguments their property cannot be parsed from, a decimal written with more
      * than {@value #MAX_DECIMAL_LENGTH} characters or whose scale lies beyond {@value #MAX_DECIMAL_SCALE}, negative or
      * positive, a boolean other than {@code true} or {@code false}, whatever its case, which rsql-jpa silently reads as
-     * {@code false}, and any argument compared to a collection as a whole, {@code null} included, which rsql-jpa reads
-     * before even looking at the type of the property: customize the builder tools the visitor holds, rather than
-     * replacing them or their argument parser, to keep refusing them.
+     * {@code false}, a {@link Date} not written as {@code yyyy-MM-dd} or {@code yyyy-MM-dd'T'HH:mm:ss}, which rsql-jpa
+     * reads leniently, and any argument compared to a collection as a whole, {@code null} included, which rsql-jpa
+     * reads before even looking at the type of the property: customize the builder tools the visitor holds, rather
+     * than replacing them or their argument parser, to keep refusing them.
      *
      * @param <E>        The type of the managed entity
      * @param entityType The type of the managed entity
@@ -328,7 +332,25 @@ public class RsqlQueries<E> {
                 // The few bytes of 1e30000000 took H2 some 37 seconds to bind, see MAX_DECIMAL_SCALE
                 throw new ArgumentFormatException(argument, type);
             }
+            if (value instanceof Date date && type.equals(Date.class) && !isWrittenAs(date, argument)) {
+                // A lenient pattern rolls 2024-02-30 over to March 1st, and ignores whatever follows it, such as the
+                // minutes of 2024-01-01T10:00, read as midnight, or the offset of 2024-01-01T10:00:00Z
+                throw new ArgumentFormatException(argument, type);
+            }
             return value;
+        }
+
+        /**
+         * Checks that a date reads back as the very argument it was parsed from, in one of the patterns the default
+         * parser reads a date with, in the time zone it was parsed in but with the digits and calendar of no locale.
+         *
+         * @param date     The parsed date
+         * @param argument The argument the date was parsed from
+         * @return {@code true} if the date is written as the argument, {@code false} otherwise
+         */
+        private static boolean isWrittenAs(Date date, String argument) {
+            return List.of("yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd").stream()
+                    .anyMatch(pattern -> new SimpleDateFormat(pattern, Locale.ROOT).format(date).equals(argument));
         }
 
     }

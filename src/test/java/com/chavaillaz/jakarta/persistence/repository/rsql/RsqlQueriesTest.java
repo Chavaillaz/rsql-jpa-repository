@@ -15,6 +15,9 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Order;
 import jakarta.persistence.criteria.Root;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -206,6 +209,34 @@ class RsqlQueriesTest extends HibernateTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> withCriteria(rsql, (context, criteria) -> queries().count(context, null, criteria)))
                 .withMessage("Cannot cast 'null' to type interface java.util.List");
+    }
+
+    /**
+     * The visitor parses a date leniently, rolling an impossible day over and ignoring whatever follows the pattern it
+     * matches first, such as the minutes of a time written without its seconds.
+     */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"2024-02-30", "2024-01-01T10:00", "2024-01-01 10:00:00", "2024-01-01T10:00:00Z", "2024-1-1"})
+    @DisplayName("rejects a date argument not written as a date or a date time, rather than silently reading another instant")
+    void rejectsADateReadLeniently(String date) {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> withCriteria("packedAt=ge='" + date + "'", (context, criteria) -> queries().count(context, null, criteria)))
+                .withMessage("Cannot cast '%s' to type class java.util.Date", date);
+    }
+
+    @Test
+    @DisplayName("reads a date argument written as a date or as a date time")
+    void readsADateAsWritten() {
+        persist(packed("Xigera", "2024-01-01T10:00:00"));
+
+        assertThat((long) withCriteria("packedAt=ge=2024-01-01", (context, criteria) -> queries().count(context, null, criteria))).isOne();
+        assertThat((long) withCriteria("packedAt==2024-01-01T10:00:00", (context, criteria) -> queries().count(context, null, criteria))).isOne();
+    }
+
+    private static CoffeeEntity packed(String name, String dateTime) {
+        CoffeeEntity coffee = coffee(name);
+        coffee.setPackedAt(Date.from(LocalDateTime.parse(dateTime).atZone(ZoneId.systemDefault()).toInstant()));
+        return coffee;
     }
 
     @Test

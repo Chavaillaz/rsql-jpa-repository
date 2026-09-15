@@ -103,7 +103,9 @@ but seconds for the database to bind, or which is written with more than `RsqlQu
 whose digits take the JDK seconds to parse by the hundred thousand. So is an argument compared to a collection as a
 whole, `null` included, such as `roaster.coffees==null`, which Hibernate would otherwise only refuse once rendering
 the statement. A boolean argument is read from `true` or `false` only, whatever its case, so that `organic==yes` is
-refused rather than silently read as `false`.
+refused rather than silently read as `false`, and a `java.util.Date` argument as written only, either as a date such
+as `2024-01-01` or as a date time such as `2024-01-01T10:00:00`, so that `2024-01-01T10:00` is refused rather than
+silently read as midnight.
 
 ## Combining with typed queries
 
