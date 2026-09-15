@@ -6,7 +6,9 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 
 import com.github.tennaito.rsql.jpa.JpaPredicateVisitor;
@@ -132,9 +134,10 @@ public class RsqlQueries<E> {
      * <p>
      * Its argument parser refuses, as arguments their property cannot be parsed from, a decimal written with more
      * than {@value #MAX_DECIMAL_LENGTH} characters or whose scale lies beyond {@value #MAX_DECIMAL_SCALE}, negative or
-     * positive, and a boolean other than {@code true} or {@code false}, whatever its case, which rsql-jpa silently
-     * reads as {@code false}: customize the builder tools the visitor holds, rather than replacing them or their
-     * argument parser, to keep refusing them.
+     * positive, a boolean other than {@code true} or {@code false}, whatever its case, which rsql-jpa silently reads as
+     * {@code false}, and any argument compared to a collection as a whole, {@code null} included, which rsql-jpa reads
+     * before even looking at the type of the property: customize the builder tools the visitor holds, rather than
+     * replacing them or their argument parser, to keep refusing them.
      *
      * @param <E>        The type of the managed entity
      * @param entityType The type of the managed entity
@@ -284,6 +287,11 @@ public class RsqlQueries<E> {
 
         @Override
         public <T> @Nullable T parse(String argument, Class<T> type) {
+            if (Collection.class.isAssignableFrom(type) || Map.class.isAssignableFrom(type)) {
+                // No text is parsed into a collection, but rsql-jpa reads null before even looking at the type, which
+                // left Hibernate to refuse comparing roaster.coffees to it, some operators only once rendering it
+                throw new ArgumentFormatException(argument, type);
+            }
             if (type.equals(BigDecimal.class) && argument.length() > MAX_DECIMAL_LENGTH) {
                 // Refused before being parsed, which takes quadratic time in its digits, see MAX_DECIMAL_LENGTH
                 throw new ArgumentFormatException(argument, type);

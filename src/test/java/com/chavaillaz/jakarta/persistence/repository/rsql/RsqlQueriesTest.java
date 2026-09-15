@@ -167,6 +167,20 @@ class RsqlQueriesTest extends HibernateTest {
                 .withMessage("Cannot filter on property " + selector);
     }
 
+    /**
+     * The visitor navigates the coffees of the roaster without joining them, the roaster being joined already, and
+     * reads a null argument before even looking at the type of the property, leaving Hibernate to refuse comparing a
+     * collection, some of them only once rendering the statement.
+     */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"roaster.coffees==null", "roaster.coffees!=null", "roaster.coffees=in=(null)", "roaster.coffees=gt=null"})
+    @DisplayName("rejects comparing a collection to an argument, even null, as the illegal argument a consumer sent")
+    void rejectsComparingACollection(String rsql) {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> withCriteria(rsql, (context, criteria) -> queries().count(context, null, criteria)))
+                .withMessage("Cannot cast 'null' to type interface java.util.List");
+    }
+
     @Test
     @DisplayName("rejects a query on a property that is not declared searchable, as soon as it is translated")
     void rejectsANonSearchableProperty() {
