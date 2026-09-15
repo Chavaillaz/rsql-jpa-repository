@@ -233,6 +233,28 @@ class RsqlQueriesTest extends HibernateTest {
         assertThat((long) withCriteria("packedAt==2024-01-01T10:00:00", (context, criteria) -> queries().count(context, null, criteria))).isOne();
     }
 
+    @Test
+    @DisplayName("compares a date exclusively to the very instant of its argument, rather than to a whole day later or earlier")
+    void comparesADateExclusively() {
+        persist(packed("Xigera", "2024-01-01T10:00:00"), packed("Yirga Batch", "2024-01-01T11:00:00"), packed("Zambia AA", "2024-01-02T09:00:00"));
+
+        PaginationResult<CoffeeEntity> after = withCriteria("packedAt=gt=2024-01-01T10:00:00", (context, criteria) ->
+                queries().search(context, null, criteria, Pageable.UNPAGED));
+        assertThat(namesOf(after)).containsExactly("Yirga Batch", "Zambia AA");
+
+        PaginationResult<CoffeeEntity> before = withCriteria("packedAt<2024-01-02T09:00:00", (context, criteria) ->
+                queries().search(context, null, criteria, Pageable.UNPAGED));
+        assertThat(namesOf(before)).containsExactly("Xigera", "Yirga Batch");
+
+        PaginationResult<CoffeeEntity> between = withCriteria("packedAt>2024-01-01;packedAt=lt=2024-01-02", (context, criteria) ->
+                queries().search(context, null, criteria, Pageable.UNPAGED));
+        assertThat(namesOf(between)).as("a date argument is midnight").containsExactly("Xigera", "Yirga Batch");
+
+        assertThat((long) withCriteria("packedAt=gt=null", (context, criteria) -> queries().count(context, null, criteria)))
+                .as("a comparison to null still matches nothing")
+                .isZero();
+    }
+
     private static CoffeeEntity packed(String name, String dateTime) {
         CoffeeEntity coffee = coffee(name);
         coffee.setPackedAt(Date.from(LocalDateTime.parse(dateTime).atZone(ZoneId.systemDefault()).toInstant()));

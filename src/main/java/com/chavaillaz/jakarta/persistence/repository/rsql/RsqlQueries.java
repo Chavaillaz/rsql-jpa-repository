@@ -27,6 +27,7 @@ import cz.jirutka.rsql.parser.ast.LogicalNode;
 import cz.jirutka.rsql.parser.ast.NoArgRSQLVisitorAdapter;
 import cz.jirutka.rsql.parser.ast.Node;
 import cz.jirutka.rsql.parser.ast.OrNode;
+import cz.jirutka.rsql.parser.ast.RSQLOperators;
 import org.hibernate.query.sqm.TerminalPathException;
 import org.jspecify.annotations.Nullable;
 
@@ -265,7 +266,10 @@ public class RsqlQueries<E> {
      * <p>
      * What the visitor joins is only known once it is applied, so the comparison is first applied to a throwaway
      * root, which issues no query, a collection it reaches through without joining it only showing in the path it
-     * navigates on that root.
+     * navigates on that root, as the type of the property it compares does.
+     * <p>
+     * rsql-jpa compares a date with a between, whose bound it moves a whole day away for an exclusive comparison: such
+     * a comparison is therefore built here instead, on the path and with the argument the visitor navigates and parses.
      *
      * @param node            The comparison to build the predicate of
      * @param criteriaBuilder The builder to use
@@ -279,15 +283,57 @@ public class RsqlQueries<E> {
         Root<E> probe = criteriaBuilder.createQuery(entityType).from(entityType);
         JpaPredicateVisitor<E> visitor = visitors.get();
         node.accept(visitor.defineRoot(probe), adapter);
-        if (probe.getJoins().isEmpty() && !reachesThroughCollection(PredicateBuilder.findPropertyPath(node.getSelector(), probe, adapter, visitor.getBuilderTools()))) {
-            return node.accept(visitors.get().defineRoot(root), adapter);
+        Path<?> path = PredicateBuilder.findPropertyPath(node.getSelector(), probe, adapter, visitor.getBuilderTools());
+        Date bound = exclusiveBound(node, path, visitor);
+        if (probe.getJoins().isEmpty() && !reachesThroughCollection(path)) {
+            return apply(node, bound, root, criteriaBuilder, adapter, visitors);
         }
 
         // Comparing the two roots as entities correlates them on the identifier, whatever it is made of
         Subquery<Integer> matching = query.subquery(Integer.class);
         Root<E> matched = matching.from(entityType);
-        Predicate predicate = node.accept(visitors.get().defineRoot(matched), adapter);
+        Predicate predicate = apply(node, bound, matched, criteriaBuilder, adapter, visitors);
         return criteriaBuilder.exists(matching.select(criteriaBuilder.literal(1)).where(criteriaBuilder.equal(matched, root), predicate));
+    }
+
+    /**
+     * Applies a comparison to the given root, through the visitor unless it compares a date exclusively.
+     *
+     * @param node            The comparison to apply
+     * @param bound           The date an exclusive comparison compares its property to, or {@code null} to apply the
+     *                        comparison through the visitor
+     * @param target          The root to apply the comparison to
+     * @param criteriaBuilder The builder to use
+     * @param adapter         The metamodel and the builder the visitor works with
+     * @param visitors        The provider of the visitor building the predicate
+     * @return The corresponding predicate
+     */
+    @SuppressWarnings("unchecked")
+    private Predicate apply(ComparisonNode node, @Nullable Date bound, Root<E> target, CriteriaBuilder criteriaBuilder, EntityManagerAdapter adapter, Supplier<? extends JpaPredicateVisitor<E>> visitors) {
+        JpaPredicateVisitor<E> visitor = visitors.get().defineRoot(target);
+        if (bound == null) {
+            return node.accept(visitor, adapter);
+        }
+        // The property is a date, see exclusiveBound, reached through a single navigation of its path
+        Path<Date> path = (Path<Date>) PredicateBuilder.findPropertyPath(node.getSelector(), target, adapter, visitor.getBuilderTools());
+        return node.getOperator().equals(RSQLOperators.GREATER_THAN) ? criteriaBuilder.greaterThan(path, bound) : criteriaBuilder.lessThan(path, bound);
+    }
+
+    /**
+     * Gets the date an exclusive comparison of a date compares its property to, parsed as the visitor parses it.
+     *
+     * @param node    The comparison
+     * @param path    The path the visitor navigates for the comparison
+     * @param visitor The visitor, whose argument parser the date is parsed with
+     * @return The date to compare the property to, or {@code null} when the comparison is no exclusive comparison of
+     *         a date, or compares it to {@code null}
+     */
+    private static @Nullable Date exclusiveBound(ComparisonNode node, Path<?> path, JpaPredicateVisitor<?> visitor) {
+        boolean exclusive = node.getOperator().equals(RSQLOperators.GREATER_THAN) || node.getOperator().equals(RSQLOperators.LESS_THAN);
+        if (!exclusive || !Date.class.isAssignableFrom(path.getJavaType())) {
+            return null;
+        }
+        return (Date) visitor.getBuilderTools().getArgumentParser().parse(node.getArguments().get(0), path.getJavaType());
     }
 
     /**
