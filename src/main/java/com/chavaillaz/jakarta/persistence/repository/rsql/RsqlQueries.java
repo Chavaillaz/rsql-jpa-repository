@@ -28,6 +28,7 @@ import cz.jirutka.rsql.parser.ast.NoArgRSQLVisitorAdapter;
 import cz.jirutka.rsql.parser.ast.Node;
 import cz.jirutka.rsql.parser.ast.OrNode;
 import cz.jirutka.rsql.parser.ast.RSQLOperators;
+import org.apache.commons.lang3.StringUtils;
 import org.hibernate.query.sqm.TerminalPathException;
 import org.jspecify.annotations.Nullable;
 
@@ -69,6 +70,15 @@ public class RsqlQueries<E> {
      * refuse the value.
      */
     public static final int MAX_DECIMAL_LENGTH = 2 * MAX_DECIMAL_SCALE;
+
+    /**
+     * The largest number of wildcards, {@code *} or {@code %}, the argument of an {@code ==} or {@code !=} comparison
+     * of a string may hold, not counting those ending it. rsql-jpa matches such a string against the argument with a
+     * {@code like}, which H2 evaluates by trying every position of the value each wildcard may stand for, so that each
+     * wildcard followed by more of the pattern multiplies the work by up to the length of the value: the few bytes of
+     * {@code *e*e*e*e*x} would otherwise take H2 some 24 seconds to match against a single string of 255 e.
+     */
+    public static final int MAX_WILDCARDS = 3;
 
     /**
      * The RSQL support of each entity type, held in a {@link ClassValue} rather than in a map keyed by the class, so
@@ -212,9 +222,10 @@ public class RsqlQueries<E> {
      * visitor holds the root it builds on: a visitor is therefore taken from the given provider for each comparison
      * at each application.
      * <p>
-     * An argument the visitor cannot parse for the type of its property, or a selector it cannot navigate, such as
-     * one reaching through a basic attribute, is a malformed filter sent by an API consumer: the criteria raise it
-     * as an {@link IllegalArgumentException} when applied, which a query does before issuing any statement.
+     * An argument the visitor cannot parse for the type of its property, a pattern holding more wildcards than
+     * {@link #MAX_WILDCARDS} allows, or a selector the visitor cannot navigate, such as one reaching through a basic
+     * attribute, is a malformed filter sent by an API consumer: the criteria raise it as an
+     * {@link IllegalArgumentException} when applied, which a query does before issuing any statement.
      *
      * @param context  The repository the query is written for
      * @param rsqlNode The parsed RSQL query
@@ -268,7 +279,8 @@ public class RsqlQueries<E> {
      * <p>
      * What the visitor joins is only known once it is applied, so the comparison is first applied to a throwaway
      * root, which issues no query. A collection it reaches through without joining it only shows in the path it
-     * navigates on that root, as the type of the property it compares does.
+     * navigates on that root, as the type of the property it compares does, which tells whether it matches a string
+     * against a pattern, see {@link #MAX_WILDCARDS}.
      * <p>
      * rsql-jpa compares a date with a between, whose bound it moves a whole day away for an exclusive comparison: such
      * a comparison is therefore built here instead, on the path and with the argument the visitor navigates and parses.
@@ -286,6 +298,7 @@ public class RsqlQueries<E> {
         JpaPredicateVisitor<E> visitor = visitors.get();
         node.accept(visitor.defineRoot(probe), adapter);
         Path<?> path = PredicateBuilder.findPropertyPath(node.getSelector(), probe, adapter, visitor.getBuilderTools());
+        requireWildcards(node, path);
         Date bound = exclusiveBound(node, path, visitor);
         if (probe.getJoins().isEmpty() && !reachesThroughCollection(path)) {
             return apply(node, bound, root, criteriaBuilder, adapter, visitors);
@@ -319,6 +332,26 @@ public class RsqlQueries<E> {
         // The property is a date, see exclusiveBound, reached through a single navigation of its path
         Path<Date> path = (Path<Date>) PredicateBuilder.findPropertyPath(node.getSelector(), target, adapter, visitor.getBuilderTools());
         return node.getOperator().equals(RSQLOperators.GREATER_THAN) ? criteriaBuilder.greaterThan(path, bound) : criteriaBuilder.lessThan(path, bound);
+    }
+
+    /**
+     * Checks that the argument of an {@code ==} or {@code !=} comparison of a string, which rsql-jpa matches the string
+     * against with a {@code like}, holds no more wildcards than {@link #MAX_WILDCARDS}.
+     *
+     * @param node The comparison
+     * @param path The path the visitor navigates for the comparison
+     * @throws IllegalArgumentException if the comparison matches a string against a pattern holding too many wildcards
+     */
+    private static void requireWildcards(ComparisonNode node, Path<?> path) {
+        boolean like = node.getOperator().equals(RSQLOperators.EQUAL) || node.getOperator().equals(RSQLOperators.NOT_EQUAL);
+        if (!like || !String.class.equals(path.getJavaType())) {
+            return;
+        }
+        // Those ending the pattern match the rest of a value at once, whatever its length
+        String pattern = StringUtils.stripEnd(node.getArguments().get(0), "*%");
+        if (pattern.chars().filter(character -> character == '*' || character == '%').count() > MAX_WILDCARDS) {
+            throw new IllegalArgumentException("Cannot filter on property %s with a pattern of more than %d wildcards".formatted(node.getSelector(), MAX_WILDCARDS));
+        }
     }
 
     /**

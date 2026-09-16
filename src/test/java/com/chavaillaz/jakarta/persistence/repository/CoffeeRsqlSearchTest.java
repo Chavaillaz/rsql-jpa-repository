@@ -251,6 +251,24 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     }
 
     @Test
+    @DisplayName("rejects a string pattern holding too many wildcards to be matched in reasonable time, as the illegal argument a consumer sent")
+    void rejectsAPatternWithTooManyWildcards() {
+        int limit = RsqlQueries.MAX_WILDCARDS;
+        String pattern = "*o".repeat(limit);
+
+        assertThat(countAll("name==" + pattern + "*"))
+                .as("Bourbon Pointu holds three o, and the wildcard ending the pattern is not counted")
+                .isOne();
+        assertThat(countAll("name=in=(" + pattern + "*o)")).as("a list holds exact strings rather than patterns").isZero();
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> countAll("name==" + pattern + "*o"))
+                .withMessage("Cannot filter on property name with a pattern of more than %d wildcards", limit);
+        assertThatIllegalArgumentException()
+                .as("H2 took some 24 seconds to match such a pattern against a single string of 255 e")
+                .isThrownBy(() -> searchAll("notes!=%e%e%e%e%x"));
+    }
+
+    @Test
     @DisplayName("reads a boolean argument from true or false only, rather than silently reading anything else as false")
     void rejectsABooleanOtherThanTrueOrFalse() {
         assertThat(countAll("organic==true")).isEqualTo(3);

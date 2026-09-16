@@ -35,8 +35,8 @@ public interface RsqlRepository<E extends Identifiable<I>, I> extends Repository
      * @return The number of matching entities
      * @throws RSQLParserException      if the expression is not valid RSQL
      * @throws IllegalArgumentException if the expression refers to a property that is not searchable, compares a
-     *                                  property to an argument its type cannot be parsed from, or nests its
-     *                                  parentheses too deeply
+     *                                  property to an argument its type cannot be parsed from or to a pattern
+     *                                  holding too many wildcards, or nests its parentheses too deeply
      */
     long count(@Nullable String rsql);
 
@@ -103,8 +103,9 @@ public interface RsqlRepository<E extends Identifiable<I>, I> extends Repository
      * @return The corresponding page, never {@code null}
      * @throws RSQLParserException      if the expression is not valid RSQL
      * @throws IllegalArgumentException if the expression refers to a property that is not searchable, compares a
-     *                                  property to an argument its type cannot be parsed from, nests its
-     *                                  parentheses too deeply, or if the requested ordering is not usable
+     *                                  property to an argument its type cannot be parsed from or to a pattern
+     *                                  holding too many wildcards, nests its parentheses too deeply, or if the
+     *                                  requested ordering is not usable
      */
     PaginationResult<E> search(@Nullable String rsql, Pageable pageable);
 
@@ -117,9 +118,10 @@ public interface RsqlRepository<E extends Identifiable<I>, I> extends Repository
      * @return The corresponding page with the tokens of the surrounding ones
      * @throws RSQLParserException      if the expression is not valid RSQL
      * @throws IllegalArgumentException if the expression refers to a property that is not searchable, compares a
-     *                                  property to an argument its type cannot be parsed from, nests its
-     *                                  parentheses too deeply, if the ordering is not usable as a cursor key, or if
-     *                                  the cursor is malformed or was issued for another ordering
+     *                                  property to an argument its type cannot be parsed from or to a pattern
+     *                                  holding too many wildcards, nests its parentheses too deeply, if the
+     *                                  ordering is not usable as a cursor key, or if the cursor is malformed or was
+     *                                  issued for another ordering
      */
     CursorResult<E> search(@Nullable String rsql, Cursor cursor);
 

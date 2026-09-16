@@ -104,7 +104,8 @@ public abstract class AbstractRsqlRepository<E extends Identifiable<I>, I> exten
      * @param rsqlNode The parsed RSQL query
      * @return The total number of matching entities
      * @throws IllegalArgumentException if the query refers to a property that is not searchable, or compares a
-     *                                  property to an argument its type cannot be parsed from
+     *                                  property to an argument its type cannot be parsed from or to a pattern
+     *                                  holding too many wildcards
      */
     protected long count(Node rsqlNode) {
         return queries().count(context(), null, toCriteria(rsqlNode));
