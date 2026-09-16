@@ -151,10 +151,11 @@ public class RsqlQueries<E> {
      * <p>
      * Its argument parser refuses, as arguments their property cannot be parsed from, any argument compared to a
      * collection as a whole, {@code null} included, which rsql-jpa reads before even looking at the type of the
-     * property, and a decimal written with more than {@value #MAX_DECIMAL_LENGTH} characters or whose scale lies
-     * beyond {@value #MAX_DECIMAL_SCALE}, negative or positive. It also refuses a boolean other than {@code true} or
-     * {@code false}, whatever its case, which rsql-jpa silently reads as {@code false}, and a {@link Date} not
-     * written as {@code yyyy-MM-dd} or {@code yyyy-MM-dd'T'HH:mm:ss}, which rsql-jpa reads leniently.
+     * property, any argument holding a NUL character, which PostgreSQL refuses in any text, and a decimal written
+     * with more than {@value #MAX_DECIMAL_LENGTH} characters or whose scale lies beyond {@value #MAX_DECIMAL_SCALE},
+     * negative or positive. It also refuses a boolean other than {@code true} or {@code false}, whatever its case,
+     * which rsql-jpa silently reads as {@code false}, and a {@link Date} not written as {@code yyyy-MM-dd} or
+     * {@code yyyy-MM-dd'T'HH:mm:ss}, which rsql-jpa reads leniently.
      * <p>
      * Customize the builder tools the visitor holds, rather than replacing them or their argument parser, so that
      * those arguments stay refused.
@@ -398,6 +399,10 @@ public class RsqlQueries<E> {
             if (Collection.class.isAssignableFrom(type) || Map.class.isAssignableFrom(type)) {
                 // No text is parsed into a collection, but rsql-jpa reads null before even looking at the type, which
                 // left Hibernate to refuse comparing roaster.coffees to it, some operators only once rendering it
+                throw new ArgumentFormatException(argument, type);
+            }
+            if (argument.indexOf(Character.MIN_VALUE) >= 0) {
+                // PostgreSQL refuses a NUL character in any text, failing the statement with a DataException
                 throw new ArgumentFormatException(argument, type);
             }
             if (type.equals(BigDecimal.class) && argument.length() > MAX_DECIMAL_LENGTH) {

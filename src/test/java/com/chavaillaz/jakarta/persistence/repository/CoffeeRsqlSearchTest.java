@@ -269,6 +269,19 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     }
 
     @Test
+    @DisplayName("rejects an argument holding a NUL character, which PostgreSQL refuses in any text, as the illegal argument a consumer sent")
+    void rejectsANulCharacter() {
+        String nul = String.valueOf(Character.MIN_VALUE);
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> countAll("name==Gei" + nul + "sha"))
+                .withMessage("Cannot cast 'Gei%ssha' to type class java.lang.String", nul);
+        assertThatIllegalArgumentException()
+                .as("PostgreSQL failed the statement with a DataException, which an API layer answers with a 500")
+                .isThrownBy(() -> searchAll("origin=in=(" + ETHIOPIA + ",Pan" + nul + "ama)"));
+    }
+
+    @Test
     @DisplayName("reads a boolean argument from true or false only, rather than silently reading anything else as false")
     void rejectsABooleanOtherThanTrueOrFalse() {
         assertThat(countAll("organic==true")).isEqualTo(3);
