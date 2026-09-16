@@ -155,9 +155,10 @@ public class RsqlQueries<E> {
      * property, any argument holding a NUL character, which PostgreSQL refuses in any text, and a decimal written
      * with more than {@value #MAX_DECIMAL_LENGTH} characters or whose scale lies beyond {@value #MAX_DECIMAL_SCALE},
      * negative or positive. It also refuses a boolean other than {@code true} or {@code false}, whatever its case,
-     * which rsql-jpa silently reads as {@code false}, and a {@link Date} not written as {@code yyyy-MM-dd} or
-     * {@code yyyy-MM-dd'T'HH:mm:ss}, which rsql-jpa reads leniently. It reads a date in the Gregorian calendar
-     * whatever the default locale, rather than in a Buddhist year under a Thai one, as rsql-jpa does.
+     * which rsql-jpa silently reads as {@code false}, a {@link Date} not written as {@code yyyy-MM-dd} or
+     * {@code yyyy-MM-dd'T'HH:mm:ss}, which rsql-jpa reads leniently, and a date past the year 9999, which PostgreSQL
+     * refuses to bind beyond the year 294276. It reads a date in the Gregorian calendar whatever the default locale,
+     * rather than in a Buddhist year under a Thai one, as rsql-jpa does.
      * <p>
      * Customize the builder tools the visitor holds, rather than replacing them or their argument parser, so that
      * those arguments stay refused.
@@ -432,13 +433,19 @@ public class RsqlQueries<E> {
 
         /**
          * Parses a date that reads back as the very argument it is parsed from, in one of the patterns the default
-         * parser reads a date with, in the default time zone but with the digits and calendar of no locale.
+         * parser reads a date with, in the default time zone but with the digits and calendar of no locale, its year
+         * being written with four digits.
          *
          * @param argument The argument to parse
          * @return The corresponding date
-         * @throws ArgumentFormatException if the argument is written in none of those patterns
+         * @throws ArgumentFormatException if the argument is written in none of those patterns, or with a year past 9999
          */
         private static Date parseDate(String argument) {
+            if (argument.indexOf('-') != 4) {
+                // A year past 9999 reads back as written too, with more digits, but lies past the years of the SQL
+                // standard, and PostgreSQL fails the statement with a DataException past the year 294276
+                throw new ArgumentFormatException(argument, Date.class);
+            }
             for (String pattern : List.of("yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd")) {
                 SimpleDateFormat format = new SimpleDateFormat(pattern, Locale.ROOT);
                 Date date = format.parse(argument, new ParsePosition(0));

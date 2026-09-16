@@ -226,6 +226,20 @@ class RsqlQueriesTest extends HibernateTest {
     }
 
     @Test
+    @DisplayName("rejects a date argument whose year is written with more than four digits, rather than failing the statement on PostgreSQL")
+    void rejectsADateBeyondTheYear9999() {
+        persist(packed("Xigera", "9999-12-31T23:59:59"));
+
+        assertThat((long) withCriteria("packedAt==9999-12-31T23:59:59", (context, criteria) -> queries().count(context, null, criteria))).isOne();
+        assertThatIllegalArgumentException()
+                .as("PostgreSQL failed the statement with a DataException, which an API layer answers with a 500")
+                .isThrownBy(() -> withCriteria("packedAt=gt=300000-01-01", (context, criteria) -> queries().count(context, null, criteria)))
+                .withMessage("Cannot cast '300000-01-01' to type class java.util.Date");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> withCriteria("packedAt=in=(2024-01-01,10000-01-01T00:00:00)", (context, criteria) -> queries().count(context, null, criteria)));
+    }
+
+    @Test
     @DisplayName("reads a date argument written as a date or as a date time")
     void readsADateAsWritten() {
         persist(packed("Xigera", "2024-01-01T10:00:00"));

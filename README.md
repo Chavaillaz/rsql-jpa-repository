@@ -108,9 +108,10 @@ Hibernate would otherwise only refuse once rendering the statement, and an argum
 PostgreSQL would otherwise refuse once executing the statement. A boolean argument is read from `true` or `false` only,
 whatever its case, so that `organic==yes` is refused rather than silently read as `false`, and a `java.util.Date`
 argument as written only, in the Gregorian calendar whatever the default locale of the server, either as a date such as
-`2024-01-01` or as a date time such as `2024-01-01T10:00:00`, so that `2024-01-01T10:00` is refused rather than silently
-read as midnight. Such a date is compared by `=gt=` and `=lt=` to that very instant, which rsql-jpa would otherwise move
-a whole day later or earlier.
+`2024-01-01` or as a date time such as `2024-01-01T10:00:00`, with a year of four digits, so that `2024-01-01T10:00` is
+refused rather than silently read as midnight, and `300000-01-01` rather than refused by PostgreSQL once executing the
+statement. Such a date is compared by `=gt=` and `=lt=` to that very instant, which rsql-jpa would otherwise move a
+whole day later or earlier.
 
 ## Combining with typed queries
 
