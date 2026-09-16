@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.BiFunction;
 
@@ -231,6 +232,23 @@ class RsqlQueriesTest extends HibernateTest {
 
         assertThat((long) withCriteria("packedAt=ge=2024-01-01", (context, criteria) -> queries().count(context, null, criteria))).isOne();
         assertThat((long) withCriteria("packedAt==2024-01-01T10:00:00", (context, criteria) -> queries().count(context, null, criteria))).isOne();
+    }
+
+    @Test
+    @DisplayName("reads a date argument in the Gregorian calendar whatever the default locale, rather than refusing every date under a Thai one")
+    void readsADateWhateverTheDefaultLocale() {
+        persist(packed("Xigera", "2024-01-01T10:00:00"));
+
+        Locale defaultLocale = Locale.getDefault();
+        Locale.setDefault(Locale.of("th", "TH"));
+        try {
+            assertThat((long) withCriteria("packedAt=ge=2024-01-01", (context, criteria) -> queries().count(context, null, criteria)))
+                    .as("a Thai default locale reads 2024 as a Buddhist year, 1481 in the Gregorian calendar")
+                    .isOne();
+            assertThat((long) withCriteria("packedAt=gt=2024-01-01T09:59:59", (context, criteria) -> queries().count(context, null, criteria))).isOne();
+        } finally {
+            Locale.setDefault(defaultLocale);
+        }
     }
 
     @Test

@@ -107,9 +107,10 @@ pattern. So is an argument compared to a collection as a whole, `null` included,
 Hibernate would otherwise only refuse once rendering the statement, and an argument holding a NUL character, which
 PostgreSQL would otherwise refuse once executing the statement. A boolean argument is read from `true` or `false` only,
 whatever its case, so that `organic==yes` is refused rather than silently read as `false`, and a `java.util.Date`
-argument as written only, either as a date such as `2024-01-01` or as a date time such as `2024-01-01T10:00:00`, so that
-`2024-01-01T10:00` is refused rather than silently read as midnight. Such a date is compared by `=gt=` and `=lt=` to
-that very instant, which rsql-jpa would otherwise move a whole day later or earlier.
+argument as written only, in the Gregorian calendar whatever the default locale of the server, either as a date such as
+`2024-01-01` or as a date time such as `2024-01-01T10:00:00`, so that `2024-01-01T10:00` is refused rather than silently
+read as midnight. Such a date is compared by `=gt=` and `=lt=` to that very instant, which rsql-jpa would otherwise move
+a whole day later or earlier.
 
 ## Combining with typed queries
 
