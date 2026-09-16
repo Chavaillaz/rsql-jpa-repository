@@ -110,8 +110,9 @@ whatever its case, so that `organic==yes` is refused rather than silently read a
 argument as written only, in the Gregorian calendar whatever the default locale of the server, either as a date such as
 `2024-01-01` or as a date time such as `2024-01-01T10:00:00`, with a year of four digits, so that `2024-01-01T10:00` is
 refused rather than silently read as midnight, and `300000-01-01` rather than refused by PostgreSQL once executing the
-statement. Such a date is compared by `=gt=` and `=lt=` to that very instant, which rsql-jpa would otherwise move a
-whole day later or earlier.
+statement. Such a date is compared by `=gt=`, `=ge=`, `=lt=` and `=le=` to that very instant, which rsql-jpa would
+otherwise move a whole day later or earlier for an exclusive comparison, and compare within a `between` whose other
+bound holds the time of day rsql-jpa was loaded at, leaving part of the day out of the comparison of a time.
 
 ## Combining with typed queries
 

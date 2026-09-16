@@ -17,6 +17,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.sql.Time;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
@@ -62,6 +63,11 @@ public class CoffeeEntity implements Identifiable<Long> {
      * Deliberately a legacy date, the RSQL visitor parsing no argument into a java.time one.
      */
     private Date packedAt;
+
+    /**
+     * Deliberately a legacy time of day, which the RSQL visitor compares within bounds holding a time of day of their own.
+     */
+    private Time servedUntil;
 
     /**
      * Deliberately nullable, to prove that a nullable attribute cannot be used as a cursor key.

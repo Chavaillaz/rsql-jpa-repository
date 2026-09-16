@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Order;
 import jakarta.persistence.criteria.Root;
+import java.sql.Time;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
@@ -283,6 +284,32 @@ class RsqlQueriesTest extends HibernateTest {
         assertThat(namesOf(between)).as("a date argument is midnight").containsExactly("Xigera", "Yirga Batch");
 
         assertThat((long) withCriteria("packedAt=gt=null", (context, criteria) -> queries().count(context, null, criteria)))
+                .as("a comparison to null still matches nothing")
+                .isZero();
+    }
+
+    /**
+     * The visitor compares a date inclusively within bounds it sets once, the last day of the year 9999 and the first of
+     * the year 5, each at the time of day it was loaded, which a time of day compares to as well.
+     */
+    @Test
+    @DisplayName("compares a date inclusively to the very instant of its argument, rather than within bounds holding the time of day the visitor was loaded at")
+    void comparesADateInclusively() {
+        CoffeeEntity forever = packed("Xigera", "9999-12-31T23:59:59");
+        forever.setServedUntil(Time.valueOf("23:59:59"));
+        CoffeeEntity morning = packed("Yirga Batch", "2024-01-01T10:00:00");
+        morning.setServedUntil(Time.valueOf("00:00:00"));
+        persist(forever, morning);
+
+        PaginationResult<CoffeeEntity> packed = withCriteria("packedAt=ge=2024-01-01T10:00:00", (context, criteria) ->
+                queries().search(context, null, criteria, Pageable.UNPAGED));
+        assertThat(namesOf(packed)).as("a date packed on the last day of 9999 falls past the time of day of the bound").containsExactly("Xigera", "Yirga Batch");
+
+        PaginationResult<CoffeeEntity> served = withCriteria("servedUntil=ge=00:00:00;servedUntil=le=23:59:59", (context, criteria) ->
+                queries().search(context, null, criteria, Pageable.UNPAGED));
+        assertThat(namesOf(served)).as("a whole day of times, whatever the time of day the visitor was loaded at").containsExactly("Xigera", "Yirga Batch");
+
+        assertThat((long) withCriteria("packedAt=le=null", (context, criteria) -> queries().count(context, null, criteria)))
                 .as("a comparison to null still matches nothing")
                 .isZero();
     }

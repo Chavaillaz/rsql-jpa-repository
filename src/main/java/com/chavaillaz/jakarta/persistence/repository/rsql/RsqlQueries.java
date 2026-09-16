@@ -2,6 +2,7 @@ package com.chavaillaz.jakarta.persistence.repository.rsql;
 
 import jakarta.persistence.criteria.CommonAbstractCriteria;
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
@@ -24,6 +25,7 @@ import com.github.tennaito.rsql.misc.DefaultArgumentParser;
 import com.github.tennaito.rsql.misc.EntityManagerAdapter;
 import cz.jirutka.rsql.parser.ast.AndNode;
 import cz.jirutka.rsql.parser.ast.ComparisonNode;
+import cz.jirutka.rsql.parser.ast.ComparisonOperator;
 import cz.jirutka.rsql.parser.ast.LogicalNode;
 import cz.jirutka.rsql.parser.ast.NoArgRSQLVisitorAdapter;
 import cz.jirutka.rsql.parser.ast.Node;
@@ -98,6 +100,16 @@ public class RsqlQueries<E> {
      * The argument parser of the default visitor, shared since it holds no state.
      */
     private static final DefaultArgumentParser ARGUMENT_PARSER = new StrictArgumentParser();
+
+    /**
+     * The ordering comparisons of a date, built here rather than by the visitor, keyed by their operator, see
+     * {@link #compare(ComparisonNode, CriteriaBuilder, CommonAbstractCriteria, Root, EntityManagerAdapter, Supplier)}.
+     */
+    private static final Map<ComparisonOperator, DateComparison> DATE_COMPARISONS = Map.of(
+            RSQLOperators.GREATER_THAN, CriteriaBuilder::greaterThan,
+            RSQLOperators.GREATER_THAN_OR_EQUAL, CriteriaBuilder::greaterThanOrEqualTo,
+            RSQLOperators.LESS_THAN, CriteriaBuilder::lessThan,
+            RSQLOperators.LESS_THAN_OR_EQUAL, CriteriaBuilder::lessThanOrEqualTo);
 
     /**
      * The type of the managed entity.
@@ -286,8 +298,11 @@ public class RsqlQueries<E> {
      * navigates on that root, as the type of the property it compares does, which tells whether it matches a string
      * against a pattern, see {@link #MAX_WILDCARDS}.
      * <p>
-     * rsql-jpa compares a date with a between, whose bound it moves a whole day away for an exclusive comparison: such
-     * a comparison is therefore built here instead, on the path and with the argument the visitor navigates and parses.
+     * rsql-jpa compares a date with a between, whose bound it moves a whole day away for an exclusive comparison, the
+     * other bound being the first day of the year 5 or the last one of the year 9999, in the calendar of the default
+     * locale and at the time of day rsql-jpa was loaded, which leaves part of the day out of the comparison of a time:
+     * an ordering comparison of a date is therefore built here instead, on the path and with the argument the visitor
+     * navigates and parses.
      *
      * @param node            The comparison to build the predicate of
      * @param criteriaBuilder The builder to use
@@ -303,7 +318,7 @@ public class RsqlQueries<E> {
         node.accept(visitor.defineRoot(probe), adapter);
         Path<?> path = PredicateBuilder.findPropertyPath(node.getSelector(), probe, adapter, visitor.getBuilderTools());
         requireWildcards(node, path);
-        Date bound = exclusiveBound(node, path, visitor);
+        Date bound = dateBound(node, path, visitor);
         if (probe.getJoins().isEmpty() && !reachesThroughCollection(path)) {
             return apply(node, bound, root, criteriaBuilder, adapter, visitors);
         }
@@ -316,10 +331,10 @@ public class RsqlQueries<E> {
     }
 
     /**
-     * Applies a comparison to the given root, through the visitor unless it compares a date exclusively.
+     * Applies a comparison to the given root, through the visitor unless it is an ordering comparison of a date.
      *
      * @param node            The comparison to apply
-     * @param bound           The date an exclusive comparison compares its property to, or {@code null} to apply the
+     * @param bound           The date an ordering comparison compares its property to, or {@code null} to apply the
      *                        comparison through the visitor
      * @param target          The root to apply the comparison to
      * @param criteriaBuilder The builder to use
@@ -333,9 +348,9 @@ public class RsqlQueries<E> {
         if (bound == null) {
             return node.accept(visitor, adapter);
         }
-        // The property is a date, see exclusiveBound, reached through a single navigation of its path
+        // The property is a date, see dateBound, reached through a single navigation of its path
         Path<Date> path = (Path<Date>) PredicateBuilder.findPropertyPath(node.getSelector(), target, adapter, visitor.getBuilderTools());
-        return node.getOperator().equals(RSQLOperators.GREATER_THAN) ? criteriaBuilder.greaterThan(path, bound) : criteriaBuilder.lessThan(path, bound);
+        return DATE_COMPARISONS.get(node.getOperator()).compare(criteriaBuilder, path, bound);
     }
 
     /**
@@ -359,17 +374,16 @@ public class RsqlQueries<E> {
     }
 
     /**
-     * Gets the date an exclusive comparison of a date compares its property to, parsed as the visitor parses it.
+     * Gets the date an ordering comparison of a date compares its property to, parsed as the visitor parses it.
      *
      * @param node    The comparison
      * @param path    The path the visitor navigates for the comparison
      * @param visitor The visitor, whose argument parser the date is parsed with
-     * @return The date to compare the property to, or {@code null} when the comparison is no exclusive comparison of
+     * @return The date to compare the property to, or {@code null} when the comparison is no ordering comparison of
      *         a date, or compares it to {@code null}
      */
-    private static @Nullable Date exclusiveBound(ComparisonNode node, Path<?> path, JpaPredicateVisitor<?> visitor) {
-        boolean exclusive = node.getOperator().equals(RSQLOperators.GREATER_THAN) || node.getOperator().equals(RSQLOperators.LESS_THAN);
-        if (!exclusive || !Date.class.isAssignableFrom(path.getJavaType())) {
+    private static @Nullable Date dateBound(ComparisonNode node, Path<?> path, JpaPredicateVisitor<?> visitor) {
+        if (!DATE_COMPARISONS.containsKey(node.getOperator()) || !Date.class.isAssignableFrom(path.getJavaType())) {
             return null;
         }
         return (Date) visitor.getBuilderTools().getArgumentParser().parse(node.getArguments().get(0), path.getJavaType());
@@ -389,6 +403,24 @@ public class RsqlQueries<E> {
             }
         }
         return false;
+    }
+
+    /**
+     * Builds the predicate of an ordering comparison of a date, such as {@link CriteriaBuilder#greaterThan}.
+     */
+    @FunctionalInterface
+    private interface DateComparison {
+
+        /**
+         * Builds the predicate comparing a date to its bound.
+         *
+         * @param criteriaBuilder The builder to use
+         * @param date            The date to compare
+         * @param bound           The date to compare it to
+         * @return The corresponding predicate
+         */
+        Predicate compare(CriteriaBuilder criteriaBuilder, Expression<Date> date, Date bound);
+
     }
 
     /**
