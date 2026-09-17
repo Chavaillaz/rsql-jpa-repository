@@ -226,9 +226,11 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     @DisplayName("rejects a decimal argument the database would take seconds to bind, as the illegal argument a consumer sent")
     void rejectsADecimalWithAnOutsizedScale() {
         int limit = ArgumentParser.MAX_DECIMAL_SCALE;
+        // A fraction of as many digits as the limit holds, whose value every database binds where the 1e1000 of
+        // the same scale is beyond the decimal of SQL Server and the NUMBER of Oracle alike
+        String fraction = "100." + "9".repeat(limit);
 
-        assertThat(countAll("price=lt=1e" + limit)).isEqualTo(7);
-        assertThat(countAll("price=gt=1e-" + limit)).isEqualTo(7);
+        assertThat(countAll("price=lt=" + fraction)).isEqualTo(7);
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> countAll("price=lt=1e" + (limit + 1)))
                 .withMessage("Cannot filter on property price with argument '1e%d', not a valid BigDecimal", limit + 1);
@@ -243,14 +245,15 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     @Test
     @DisplayName("rejects a decimal argument too long for its digits to be parsed in reasonable time, as the illegal argument a consumer sent")
     void rejectsADecimalTooLongToParse() {
-        String digits = "9".repeat(ArgumentParser.MAX_DECIMAL_LENGTH);
+        // Leading zeros, so that the value stays one every database binds however long the argument is written
+        String digits = "0".repeat(ArgumentParser.MAX_DECIMAL_LENGTH - 10) + "9".repeat(10);
 
         assertThat(countAll("price=lt=" + digits)).isEqualTo(7);
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> countAll("price=lt=" + digits + "9"))
                 .as("the argument is quoted abbreviated, a whole one flooding the logs of the application")
                 .satisfies(refusal -> assertThat(refusal.getMessage())
-                        .startsWith("Cannot filter on property price with argument '999")
+                        .startsWith("Cannot filter on property price with argument '000")
                         .endsWith("...', not a valid BigDecimal")
                         .hasSizeLessThan(200));
         assertThatIllegalArgumentException()

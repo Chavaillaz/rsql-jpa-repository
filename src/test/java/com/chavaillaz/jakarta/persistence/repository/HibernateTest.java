@@ -5,7 +5,6 @@ import static org.slf4j.LoggerFactory.getLogger;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
-import jakarta.persistence.metamodel.EntityType;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +28,8 @@ import org.slf4j.Logger;
 import com.chavaillaz.jakarta.persistence.Identifiable;
 
 /**
- * Base class of the tests running against a real Hibernate session factory, backed by an in memory database.
+ * Base class of the tests running against a real Hibernate session factory, backed by the database {@link TestDatabase}
+ * selects, an in memory H2 unless told otherwise.
  * <p>
  * The subclasses declare the entity types they need in their own {@code @BeforeAll}, by calling
  * {@link #setupSessionFactory(Class...)}; the data is truncated after each test so that the tests stay isolated
@@ -60,6 +60,7 @@ public abstract class HibernateTest {
 
         StandardServiceRegistry registry = new StandardServiceRegistryBuilder()
                 .loadProperties("hibernate.properties")
+                .applySettings(TestDatabase.settings())
                 .build();
 
         MetadataSources sources = new MetadataSources(registry);
@@ -178,27 +179,14 @@ public abstract class HibernateTest {
     }
 
     /**
-     * Deletes every row of every mapped entity, the referential integrity being disabled so that the deletion
-     * order does not matter.
+     * Deletes every row of every mapped entity, truncating the tables the way the database at hand allows despite
+     * the foreign keys between them.
      */
     protected void deleteAll() {
         if (sessionFactory == null || sessionFactory.isClosed()) {
             return;
         }
-        runInTransaction(entityManager -> {
-            entityManager.createNativeQuery("SET REFERENTIAL_INTEGRITY FALSE").executeUpdate();
-            entityNames().forEach(name -> entityManager.createQuery("delete from " + name).executeUpdate());
-            entityManager.createNativeQuery("SET REFERENTIAL_INTEGRITY TRUE").executeUpdate();
-        });
-    }
-
-    /**
-     * @return The names of the mapped entities
-     */
-    protected List<String> entityNames() {
-        return sessionFactory.getMetamodel().getEntities().stream()
-                .map(EntityType::getName)
-                .toList();
+        sessionFactory.getSchemaManager().truncateMappedObjects();
     }
 
     protected <T, R extends Repository<E, ?>, E extends Identifiable<?>> T withRepository(Class<R> repositoryType, Function<R, T> action) {
