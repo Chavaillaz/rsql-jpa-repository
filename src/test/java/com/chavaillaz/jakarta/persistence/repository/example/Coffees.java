@@ -88,6 +88,7 @@ public final class Coffees {
             // Deliberately cupped by the other roaster, so that a selector reaching through the embeddable cannot
             // be confused with the one reaching through the association of the coffee itself
             coffee.cupped(ethiopian ? moka : kaldi, 80 + coffee.getStrength());
+            coffee.setLot(String.valueOf(coffee.getStrength() * 10));
             entityManager.persist(coffee);
         });
         entityManager.flush();

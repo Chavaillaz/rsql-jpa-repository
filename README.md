@@ -159,6 +159,8 @@ wrong result.
 - **An argument its property cannot be read as**, such as `strength==strong`, `organic==yes`, which would otherwise
   be read as `false`, `roast==light`, a constant being named as it is declared, or an argument of a type no value is
   read as, such as a `Calendar` or a `byte[]`.
+- **An argument the mapping of its property cannot hold**, such as a string an attribute converter stores as the
+  number it spells, which Hibernate would otherwise refuse while binding the statement.
 - **A date or time argument written otherwise than described above**, so that `2024-01-01T10:00` is refused rather
   than silently read as midnight, `2024-02-30` rather than read as March 1st, and a year of more than four digits,
   such as `300000-01-01`, rather than refused by PostgreSQL once executing the statement. A `Duration` longer than

@@ -16,6 +16,8 @@ import java.util.Map;
 
 import cz.jirutka.rsql.parser.ast.ComparisonNode;
 import cz.jirutka.rsql.parser.ast.ComparisonOperator;
+import org.hibernate.query.sqm.tree.domain.SqmPath;
+import org.hibernate.type.ConvertedBasicType;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -213,11 +215,12 @@ public final class RsqlComparison {
      * Reads the only argument of the comparison as the type of the compared property.
      *
      * @return The corresponding value, or {@code null} when the argument is the {@code null} literal
-     * @throws IllegalArgumentException if the argument is no valid value of that type
+     * @throws IllegalArgumentException if the argument is no valid value of that type, or one the mapping of the
+     *                                  property cannot hold
      * @see #parse(String, Class)
      */
     public @Nullable Object value() {
-        return parse(arguments().get(0), type());
+        return read(arguments().get(0));
     }
 
     /**
@@ -225,13 +228,54 @@ public final class RsqlComparison {
      * of them, such as {@code =in=}.
      *
      * @return The corresponding values, in order, a {@code null} standing for the {@code null} literal
-     * @throws IllegalArgumentException if one of the arguments is no valid value of that type
+     * @throws IllegalArgumentException if one of the arguments is no valid value of that type, or one the mapping
+     *                                  of the property cannot hold
      * @see #parse(String, Class)
      */
     public List<@Nullable Object> values() {
         return arguments().stream()
-                .map(argument -> parse(argument, type()))
+                .map(this::read)
                 .toList();
+    }
+
+    /**
+     * Reads an argument as the type of the compared property and checks the mapping of that property can convert
+     * it, an attribute converter being free to refuse a value of the very type it converts.
+     *
+     * @param argument The argument to read
+     * @return The corresponding value, or {@code null} when the argument is the {@code null} literal
+     * @throws IllegalArgumentException if the argument is no valid value of that type, or one the mapping of the
+     *                                  property cannot hold
+     */
+    private @Nullable Object read(String argument) {
+        Object value = parse(argument, type());
+        if (value != null) {
+            requireConvertible(argument, value);
+        }
+        return value;
+    }
+
+    /**
+     * Checks that the mapping of the compared property can convert a value into the one its column holds, which
+     * an attribute converter is free to refuse: a string a converter stores as the number it spells would
+     * otherwise fail the statement while binding it, with the very exception raised here, which an API layer
+     * answers with a 500.
+     *
+     * @param argument The argument the value was read from, which the message quotes
+     * @param value    The value to convert
+     * @throws IllegalArgumentException if the converter of the property refuses the value
+     */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void requireConvertible(String argument, Object value) {
+        if (!(path() instanceof SqmPath<?> path) || !(path.getNodeType() instanceof ConvertedBasicType converted)) {
+            return;
+        }
+        try {
+            converted.getValueConverter().toRelationalValue(value);
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("Cannot filter on property %s with argument '%s', which the property cannot hold"
+                    .formatted(selector(), abbreviate(argument, MAX_QUOTED_LENGTH)), e);
+        }
     }
 
     /**

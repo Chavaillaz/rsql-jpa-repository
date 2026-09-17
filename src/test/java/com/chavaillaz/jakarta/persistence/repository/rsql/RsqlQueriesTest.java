@@ -364,6 +364,32 @@ class RsqlQueriesTest extends HibernateTest {
     }
 
     /**
+     * A converter is free to refuse a value of the very type it converts, and Hibernate applies it while binding
+     * the statement, where the exception it raises is no illegal argument at all.
+     */
+    @Test
+    @DisplayName("rejects an argument the converter of its property refuses, rather than failing the statement while binding it")
+    void rejectsAnArgumentTheConverterRefuses() {
+        assertThat(names("lot=gt=50")).as("a lot is stored as the number it spells").containsExactly(HARRAR, KONA, SIDAMO);
+        assertThat(count("lot==null")).isZero();
+        assertThatIllegalArgumentException()
+                .as("Hibernate raised a PersistenceException while binding it, which an API layer answers with a 500")
+                .isThrownBy(() -> count("lot=gt=" + GEISHA))
+                .withMessage("Cannot filter on property lot with argument 'Geisha', which the property cannot hold");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> count("lot=in=(50," + GEISHA + ")"))
+                .withMessage("Cannot filter on property lot with argument 'Geisha', which the property cannot hold");
+        assertThatIllegalArgumentException()
+                .as("a pattern spells no number either")
+                .isThrownBy(() -> count("lot==*5*"))
+                .withMessage("Cannot filter on property lot with argument '*5*', which the property cannot hold");
+        assertThatIllegalArgumentException()
+                .as("and a pattern is matched by lowering the property, which Hibernate refuses for a converted one")
+                .isThrownBy(() -> count("lot==50"))
+                .withMessage("Cannot filter on property lot with ==");
+    }
+
+    /**
      * A date is read as it is written or not at all, where a lenient parsing rolls an impossible day over and
      * ignores whatever follows the pattern it matches first, such as the minutes of a time written without its
      * seconds.

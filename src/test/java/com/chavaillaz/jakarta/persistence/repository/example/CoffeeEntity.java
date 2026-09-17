@@ -7,6 +7,7 @@ import static jakarta.persistence.GenerationType.IDENTITY;
 
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
@@ -81,6 +82,12 @@ public class CoffeeEntity implements Identifiable<Long> {
      * Deliberately nullable, to prove that a nullable attribute cannot be used as a cursor key.
      */
     private String decafLabel;
+
+    /**
+     * Deliberately a string a converter stores as the number it spells, which no other string converts into.
+     */
+    @Convert(converter = LotConverter.class)
+    private @Nullable String lot;
 
     @ManyToOne(fetch = LAZY)
     @JoinColumn(name = "roaster_id")
