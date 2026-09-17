@@ -15,6 +15,7 @@ import com.chavaillaz.jakarta.persistence.repository.Cursor;
 import com.chavaillaz.jakarta.persistence.repository.CursorResult;
 import com.chavaillaz.jakarta.persistence.repository.Pageable;
 import com.chavaillaz.jakarta.persistence.repository.PaginationResult;
+import com.chavaillaz.jakarta.persistence.rsql.RsqlDialect;
 
 /**
  * Base implementation of the {@link RsqlRepository} contract, adding dynamic RSQL filtering on top of the
@@ -27,13 +28,6 @@ import com.chavaillaz.jakarta.persistence.repository.PaginationResult;
  * @param <I> The type of the entity identifier
  */
 public abstract class AbstractRsqlRepository<E extends Identifiable<I>, I> extends AbstractRepository<E, I> implements RsqlRepository<E, I> {
-
-    /**
-     * The number of levels the parentheses of an RSQL query may be nested to, far more than any filter written by
-     * hand or by a query builder needs: the parser, the translation into criteria and the persistence provider all
-     * recurse into each level, so that a few kilobytes of parentheses would otherwise overflow the stack.
-     */
-    public static final int MAX_NESTING_DEPTH = 64;
 
     /**
      * Creates a repository.
@@ -114,55 +108,20 @@ public abstract class AbstractRsqlRepository<E extends Identifiable<I>, I> exten
 
     /**
      * Parses an RSQL query into the nodes {@link #toCriteria(Node)} translates, with the
-     * {@link RsqlDialect#parser() parser of the dialect}, refusing a query nesting its parentheses deeper than
-     * {@value #MAX_NESTING_DEPTH} levels before the parser recurses into them.
+     * {@link RsqlDialect#parse(String) dialect of the repository}, which refuses a query nesting its parentheses
+     * deeper than {@link RsqlDialect#MAX_NESTING_DEPTH} levels before the parser recurses into them.
      * <p>
-     * Parse the queries sent by the API consumers with this method rather than with that parser itself, whose
-     * stack a few kilobytes of parentheses are enough to overflow.
+     * Parse the queries sent by the API consumers with this method rather than with the
+     * {@link RsqlDialect#parser() parser} itself, whose stack a few kilobytes of parentheses are enough to
+     * overflow.
      *
      * @param rsql The RSQL query to parse
      * @return The corresponding nodes
      * @throws RSQLParserException      if the query is not valid RSQL, or uses an operator the dialect does not hold
-     * @throws IllegalArgumentException if the query nests its parentheses deeper than {@value #MAX_NESTING_DEPTH}
-     *                                  levels
+     * @throws IllegalArgumentException if the query nests its parentheses too deeply
      */
     protected Node parse(String rsql) {
-        requireNestingDepth(rsql);
-        return rsqlDialect().parser().parse(rsql);
-    }
-
-    /**
-     * Checks how deep the parentheses of an RSQL query are nested, counting them as the parser tokenizes them: a
-     * parenthesis within a quoted argument, where a backslash escapes the next character, nests nothing.
-     *
-     * @param rsql The RSQL query to check
-     * @throws IllegalArgumentException if the query nests its parentheses deeper than {@value #MAX_NESTING_DEPTH}
-     *                                  levels
-     */
-    private static void requireNestingDepth(String rsql) {
-        int depth = 0;
-        char quote = 0;
-        boolean escaped = false;
-        for (int index = 0; index < rsql.length(); index++) {
-            char character = rsql.charAt(index);
-            if (escaped) {
-                escaped = false;
-            } else if (quote != 0) {
-                escaped = character == '\\';
-                if (character == quote) {
-                    quote = 0;
-                }
-            } else if (character == '"' || character == '\'') {
-                quote = character;
-            } else if (character == '(') {
-                depth++;
-                if (depth > MAX_NESTING_DEPTH) {
-                    throw new IllegalArgumentException("Cannot filter with an RSQL query nesting its parentheses deeper than %d levels".formatted(MAX_NESTING_DEPTH));
-                }
-            } else if (character == ')') {
-                depth--;
-            }
-        }
+        return rsqlDialect().parse(rsql);
     }
 
     /**

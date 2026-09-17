@@ -1,8 +1,8 @@
-package com.chavaillaz.jakarta.persistence.repository.rsql;
+package com.chavaillaz.jakarta.persistence.rsql;
 
-import static com.chavaillaz.jakarta.persistence.repository.rsql.RsqlQueries.MAX_DECIMAL_LENGTH;
-import static com.chavaillaz.jakarta.persistence.repository.rsql.RsqlQueries.MAX_DECIMAL_SCALE;
-import static com.chavaillaz.jakarta.persistence.repository.rsql.StrictArgumentParser.parse;
+import static com.chavaillaz.jakarta.persistence.rsql.ArgumentParser.MAX_DECIMAL_LENGTH;
+import static com.chavaillaz.jakarta.persistence.rsql.ArgumentParser.MAX_DECIMAL_SCALE;
+import static com.chavaillaz.jakarta.persistence.rsql.StrictArgumentParser.parse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;

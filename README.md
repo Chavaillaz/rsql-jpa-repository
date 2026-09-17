@@ -167,16 +167,16 @@ wrong result.
   the nanoseconds of a `long` is refused for the same reason.
 - **A comparison ordering a property nothing orders**, such as `roaster=gt=null` on an association.
 - **A collection of entities or embeddables compared as a whole**, `null` included, such as `roaster.coffees==null`.
-- **An expression nesting its parentheses deeper than `AbstractRsqlRepository.MAX_NESTING_DEPTH`** levels, refused
+- **An expression nesting its parentheses deeper than `RsqlDialect.MAX_NESTING_DEPTH`** levels, refused
   before the parser recurses into them, since a few kilobytes of parentheses are otherwise enough to overflow the
   stack of the parser, of the translation and of the persistence provider alike.
-- **A string pattern holding more than `RsqlQueries.MAX_WILDCARDS` wildcards**, `*` or `%`, not counting those
+- **A string pattern holding more than `RsqlComparison.MAX_WILDCARDS` wildcards**, `*` or `%`, not counting those
   ending it, such as `name==*e*e*e*e*x`, which can take H2 seconds to match against a single value, and **any
   pattern matched against a string not held as text**, such as a `@Lob` one, which Hibernate would otherwise refuse
   to lower for the comparison.
-- **A decimal or integer argument whose scale lies beyond `RsqlQueries.MAX_DECIMAL_SCALE`**, negative or positive,
+- **A decimal or integer argument whose scale lies beyond `ArgumentParser.MAX_DECIMAL_SCALE`**, negative or positive,
   such as `price=lt=1e30000000`, which takes a few bytes to send but seconds for the database to bind, **or written
-  with more than `RsqlQueries.MAX_DECIMAL_LENGTH` characters**, whose digits take the JDK seconds to parse by the
+  with more than `ArgumentParser.MAX_DECIMAL_LENGTH` characters**, whose digits take the JDK seconds to parse by the
   hundred thousand.
 - **An argument holding a NUL character**, which PostgreSQL would otherwise refuse once executing the statement.
 
@@ -227,6 +227,26 @@ The parser of the dialect accepts exactly its operators, so that one it does not
 parsed. Registering an argument type leaves the reading of every other one untouched, along with the checks applying
 to any argument; replacing the parser as a whole, with `withArgumentParser`, gives up the refusals documented above,
 which a parser of your own would have to apply as well.
+
+## Filtering without a repository
+
+Everything above but the resolution of the selectors against `searchableProperties()` lives in the
+`com.chavaillaz.jakarta.persistence.rsql` package, which depends on nothing but the RSQL parser, the criteria API
+and Hibernate. `RsqlFilter` resolves a parsed query against the metamodel of an entity and builds its predicate on
+whichever root it is given, so that the very same filtering applies to a criteria query, a count, a deletion or a
+specification of a framework of your own:
+
+```java
+Node node = RsqlDialect.DEFAULT.parse("origin==Ethiopia;notes.flavour==Citrus");
+RsqlFilter<CoffeeEntity> filter = RsqlFilter.of(node, CoffeeEntity.class, entityManager.getMetamodel());
+
+CriteriaQuery<CoffeeEntity> query = criteriaBuilder.createQuery(CoffeeEntity.class);
+Root<CoffeeEntity> root = query.from(CoffeeEntity.class);
+query.where(filter.toPredicate(criteriaBuilder, query, root));
+```
+
+Pass a dialect and the resolution of the selectors into entity attribute paths to the four argument overload, which
+is what `AbstractRsqlRepository` does with the searchable properties of a repository.
 
 ## Contributing
 

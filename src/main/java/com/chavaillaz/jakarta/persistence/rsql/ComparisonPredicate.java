@@ -1,4 +1,4 @@
-package com.chavaillaz.jakarta.persistence.repository.rsql;
+package com.chavaillaz.jakarta.persistence.rsql;
 
 import jakarta.persistence.criteria.Predicate;
 

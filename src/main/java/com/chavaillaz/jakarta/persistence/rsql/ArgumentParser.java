@@ -1,4 +1,4 @@
-package com.chavaillaz.jakarta.persistence.repository.rsql;
+package com.chavaillaz.jakarta.persistence.rsql;
 
 import org.jspecify.annotations.Nullable;
 
@@ -19,10 +19,28 @@ import org.jspecify.annotations.Nullable;
 public interface ArgumentParser {
 
     /**
-     * The default parser, reading the types of the base library's cursor keys, the legacy dates and whatever else
-     * exposes a static {@code valueOf(String)} method.
+     * The default parser, reading the usual types of a JPA attribute, the legacy dates and whatever else exposes
+     * a static {@code valueOf(String)} method.
      */
     ArgumentParser DEFAULT = StrictArgumentParser::parse;
+
+    /**
+     * The largest {@link java.math.BigDecimal#scale() scale}, negative or positive, a decimal argument may have,
+     * as many digits as the largest precision a PostgreSQL numeric column may be declared with. The database or
+     * its driver may spell a decimal out digit by digit to bind it, as H2 does, so that the few bytes of an
+     * argument such as {@code 1e30000000} would otherwise take seconds to bind, only for the database to refuse a
+     * value no column holds.
+     */
+    int MAX_DECIMAL_SCALE = 1000;
+
+    /**
+     * The largest number of characters a decimal or integer argument may be written with, twice
+     * {@link #MAX_DECIMAL_SCALE}, enough to spell out any value a numeric column may be declared to hold. The JDK
+     * parses the digits of such a number in quadratic time, and a query reads the arguments of its filter more
+     * than once, so that the quarter of a megabyte of digits a consumer is free to send in the body of a request
+     * would otherwise take seconds to parse, only for the database to refuse the value.
+     */
+    int MAX_DECIMAL_LENGTH = 2 * MAX_DECIMAL_SCALE;
 
     /**
      * Parses an argument into the given type.

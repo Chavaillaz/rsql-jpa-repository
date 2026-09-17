@@ -1,4 +1,4 @@
-package com.chavaillaz.jakarta.persistence.repository.rsql;
+package com.chavaillaz.jakarta.persistence.rsql;
 
 import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Path;
@@ -14,8 +14,6 @@ import java.util.regex.Pattern;
 
 import org.jspecify.annotations.Nullable;
 
-import com.chavaillaz.jakarta.persistence.repository.SortCriterion;
-
 /**
  * Selector of an RSQL comparison resolved against the metamodel: the entity attributes it navigates, and how each
  * of them is navigated once a query hands its root over.
@@ -28,14 +26,15 @@ import com.chavaillaz.jakarta.persistence.repository.SortCriterion;
  * when an association or a collection behind it has to be, only a {@link From} being joinable, which costs no join
  * in the emitted SQL.
  *
- * @see RsqlQueries#compare(com.chavaillaz.jakarta.persistence.repository.RepositoryContext, cz.jirutka.rsql.parser.ast.ComparisonNode, RsqlDialect)
+ * @see RsqlFilter
  */
 final class PropertyPath {
 
     /**
-     * Compiled form of the nesting separator of the base library, quoted since the dot is a regex metacharacter.
+     * The separator of the attributes of a nested selector, the dot of the RSQL convention, compiled since it is
+     * also a regex metacharacter.
      */
-    private static final Pattern NESTING_PATTERN = Pattern.compile(Pattern.quote(SortCriterion.NESTING_SEPARATOR));
+    private static final Pattern NESTING_PATTERN = Pattern.compile(Pattern.quote("."));
 
     private final String selector;
 
@@ -207,7 +206,7 @@ final class PropertyPath {
     /**
      * Tells whether the navigation joins anything, an association or a collection, in which case the comparison
      * belongs in a correlated subquery of its own rather than in the query itself, see
-     * {@link RsqlQueries#compare(com.chavaillaz.jakarta.persistence.repository.RepositoryContext, cz.jirutka.rsql.parser.ast.ComparisonNode, RsqlDialect)}.
+     * {@link RsqlFilter}.
      *
      * @return {@code true} if the navigation joins anything, {@code false} otherwise
      */

@@ -1,7 +1,7 @@
-package com.chavaillaz.jakarta.persistence.repository.rsql;
+package com.chavaillaz.jakarta.persistence.rsql;
 
-import static com.chavaillaz.jakarta.persistence.repository.rsql.RsqlQueries.MAX_DECIMAL_LENGTH;
-import static com.chavaillaz.jakarta.persistence.repository.rsql.RsqlQueries.MAX_DECIMAL_SCALE;
+import static com.chavaillaz.jakarta.persistence.rsql.ArgumentParser.MAX_DECIMAL_LENGTH;
+import static com.chavaillaz.jakarta.persistence.rsql.ArgumentParser.MAX_DECIMAL_SCALE;
 import static java.util.Map.entry;
 
 import java.lang.reflect.InvocationTargetException;
@@ -158,7 +158,7 @@ final class StrictArgumentParser {
 
     /**
      * Checks that a number is written with few enough characters to be parsed in reasonable time, before its
-     * digits are read, see {@link RsqlQueries#MAX_DECIMAL_LENGTH}.
+     * digits are read, see {@link ArgumentParser#MAX_DECIMAL_LENGTH}.
      *
      * @param argument The argument to check
      * @return The very same argument

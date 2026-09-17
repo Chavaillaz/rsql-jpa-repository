@@ -1,6 +1,5 @@
-package com.chavaillaz.jakarta.persistence.repository.rsql;
+package com.chavaillaz.jakarta.persistence.rsql;
 
-import static com.chavaillaz.jakarta.persistence.repository.rsql.RsqlQueries.MAX_WILDCARDS;
 import static org.apache.commons.lang3.ClassUtils.primitiveToWrapper;
 import static org.apache.commons.lang3.StringUtils.abbreviate;
 import static org.apache.commons.lang3.StringUtils.stripEnd;
@@ -36,6 +35,17 @@ import org.jspecify.annotations.Nullable;
  * @see RsqlDialect#withOperator(ComparisonOperator, ComparisonPredicate)
  */
 public final class RsqlComparison {
+
+    /**
+     * The largest number of wildcards, {@code *} or {@code %}, the argument of a comparison matching a string as a
+     * pattern may hold, not counting those ending it. A database may evaluate a {@code like} by trying every
+     * position of the value each wildcard may stand for, so that each wildcard followed by more of the pattern
+     * multiplies the work by up to the length of the value: the few bytes of {@code *e*e*e*e*x} would otherwise
+     * take H2 some 24 seconds to match against a single string of 255 e.
+     *
+     * @see #pattern(String)
+     */
+    public static final int MAX_WILDCARDS = 3;
 
     /**
      * The wildcards of a {@code like} pattern, the {@code *} of the RSQL convention and the {@code %} of SQL,
@@ -125,7 +135,7 @@ public final class RsqlComparison {
     /**
      * Gets the query the predicate belongs to, to create a subquery of a comparison from. This is the correlated
      * subquery of the comparison itself when it reaches through an association or a collection, see
-     * {@link RsqlQueries#compare(com.chavaillaz.jakarta.persistence.repository.RepositoryContext, ComparisonNode, RsqlDialect)}.
+     * {@link RsqlFilter}.
      *
      * @return The query or subquery the predicate belongs to
      */
@@ -323,11 +333,11 @@ public final class RsqlComparison {
      * multiplies the work by up to the length of the value: the few bytes of {@code *e*e*e*e*x} take H2 some 24
      * seconds to match against a single string of 255 e, and a consumer is free to send them as often as it cares
      * to. Those ending a pattern match the rest of a value at once, whatever its length, and are not counted, see
-     * {@link RsqlQueries#MAX_WILDCARDS}.
+     * {@link #MAX_WILDCARDS}.
      *
      * @param argument The argument to turn into a pattern
      * @return The corresponding pattern
-     * @throws IllegalArgumentException if the argument holds more wildcards than {@link RsqlQueries#MAX_WILDCARDS}
+     * @throws IllegalArgumentException if the argument holds more wildcards than {@link #MAX_WILDCARDS}
      */
     public String pattern(String argument) {
         long wildcards = stripEnd(argument, WILDCARDS).chars()

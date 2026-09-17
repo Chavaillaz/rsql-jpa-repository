@@ -52,6 +52,8 @@ import com.chavaillaz.jakarta.persistence.repository.example.Coffees;
 import com.chavaillaz.jakarta.persistence.repository.example.Roast;
 import com.chavaillaz.jakarta.persistence.repository.example.RoasterEntity;
 import com.chavaillaz.jakarta.persistence.repository.example.TastingNoteEntity;
+import com.chavaillaz.jakarta.persistence.rsql.RsqlComparison;
+import com.chavaillaz.jakarta.persistence.rsql.RsqlDialect;
 
 @DisplayName("RsqlQueries")
 class RsqlQueriesTest extends HibernateTest {
@@ -542,7 +544,7 @@ class RsqlQueriesTest extends HibernateTest {
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> withCriteria(searchable, "brewer==*a*b*c*d*", (context, criteria) -> queries().count(context, null, criteria)))
-                .withMessage("Cannot filter on property brewer with a pattern of more than %d wildcards", RsqlQueries.MAX_WILDCARDS);
+                .withMessage("Cannot filter on property brewer with a pattern of more than %d wildcards", RsqlComparison.MAX_WILDCARDS);
     }
 
     @Test
@@ -558,7 +560,7 @@ class RsqlQueriesTest extends HibernateTest {
         assertThatIllegalArgumentException()
                 .as("the wildcards of a pattern stay limited")
                 .isThrownBy(() -> countWith(dialect, "name=like=*a*b*c*d*e"))
-                .withMessage("Cannot filter on property name with a pattern of more than %d wildcards", RsqlQueries.MAX_WILDCARDS);
+                .withMessage("Cannot filter on property name with a pattern of more than %d wildcards", RsqlComparison.MAX_WILDCARDS);
     }
 
     @Test

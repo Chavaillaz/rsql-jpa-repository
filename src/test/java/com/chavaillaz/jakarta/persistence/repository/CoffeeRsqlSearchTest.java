@@ -37,8 +37,9 @@ import com.chavaillaz.jakarta.persistence.repository.example.Roast;
 import com.chavaillaz.jakarta.persistence.repository.example.RoasterEntity;
 import com.chavaillaz.jakarta.persistence.repository.example.TastingNoteEntity;
 import com.chavaillaz.jakarta.persistence.repository.rsql.AbstractRsqlRepository;
-import com.chavaillaz.jakarta.persistence.repository.rsql.RsqlDialect;
-import com.chavaillaz.jakarta.persistence.repository.rsql.RsqlQueries;
+import com.chavaillaz.jakarta.persistence.rsql.ArgumentParser;
+import com.chavaillaz.jakarta.persistence.rsql.RsqlComparison;
+import com.chavaillaz.jakarta.persistence.rsql.RsqlDialect;
 
 @DisplayName("Searching the coffee menu with an RSQL query")
 class CoffeeRsqlSearchTest extends HibernateTest {
@@ -224,7 +225,7 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     @Test
     @DisplayName("rejects a decimal argument the database would take seconds to bind, as the illegal argument a consumer sent")
     void rejectsADecimalWithAnOutsizedScale() {
-        int limit = RsqlQueries.MAX_DECIMAL_SCALE;
+        int limit = ArgumentParser.MAX_DECIMAL_SCALE;
 
         assertThat(countAll("price=lt=1e" + limit)).isEqualTo(7);
         assertThat(countAll("price=gt=1e-" + limit)).isEqualTo(7);
@@ -242,7 +243,7 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     @Test
     @DisplayName("rejects a decimal argument too long for its digits to be parsed in reasonable time, as the illegal argument a consumer sent")
     void rejectsADecimalTooLongToParse() {
-        String digits = "9".repeat(RsqlQueries.MAX_DECIMAL_LENGTH);
+        String digits = "9".repeat(ArgumentParser.MAX_DECIMAL_LENGTH);
 
         assertThat(countAll("price=lt=" + digits)).isEqualTo(7);
         assertThatIllegalArgumentException()
@@ -260,7 +261,7 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     @Test
     @DisplayName("rejects a string pattern holding too many wildcards to be matched in reasonable time, as the illegal argument a consumer sent")
     void rejectsAPatternWithTooManyWildcards() {
-        int limit = RsqlQueries.MAX_WILDCARDS;
+        int limit = RsqlComparison.MAX_WILDCARDS;
         String pattern = "*o".repeat(limit);
 
         assertThat(countAll("name==" + pattern + "*"))
@@ -304,7 +305,7 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     @Test
     @DisplayName("rejects a query nesting its parentheses too deeply, before the parser recurses into them")
     void rejectsADeeplyNestedQuery() {
-        int limit = AbstractRsqlRepository.MAX_NESTING_DEPTH;
+        int limit = RsqlDialect.MAX_NESTING_DEPTH;
         String origin = "origin==" + ETHIOPIA;
 
         assertThat(countAll("(".repeat(limit) + origin + ")".repeat(limit))).isEqualTo(3);
@@ -319,7 +320,7 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     @Test
     @DisplayName("counts no parenthesis of a quoted argument towards the nesting of a query")
     void ignoresTheParenthesesOfAQuotedArgument() {
-        String parentheses = "(".repeat(AbstractRsqlRepository.MAX_NESTING_DEPTH + 1);
+        String parentheses = "(".repeat(RsqlDialect.MAX_NESTING_DEPTH + 1);
 
         assertThat(countAll("name=='" + parentheses + "'")).isZero();
         assertThat(countAll("name==\"\\\"" + parentheses + "\""))

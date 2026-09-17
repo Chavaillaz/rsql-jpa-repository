@@ -1,4 +1,4 @@
-package com.chavaillaz.jakarta.persistence.repository.rsql;
+package com.chavaillaz.jakarta.persistence.rsql;
 
 import static org.apache.commons.lang3.ClassUtils.primitiveToWrapper;
 
@@ -8,7 +8,9 @@ import java.util.Set;
 import java.util.function.Function;
 
 import cz.jirutka.rsql.parser.RSQLParser;
+import cz.jirutka.rsql.parser.RSQLParserException;
 import cz.jirutka.rsql.parser.ast.ComparisonOperator;
+import cz.jirutka.rsql.parser.ast.Node;
 import cz.jirutka.rsql.parser.ast.RSQLOperators;
 import org.jspecify.annotations.Nullable;
 
@@ -34,9 +36,8 @@ import org.jspecify.annotations.Nullable;
  * }
  * }</pre>
  * The {@link #parser()} accepts exactly the operators of the dialect, so that an operator it does not know is
- * refused while the query is parsed, before anything is translated.
- *
- * @see AbstractRsqlRepository#rsqlDialect()
+ * refused while the query is parsed, before anything is translated, and {@link #parse(String)} guards the stack
+ * of that parser against a query nesting its parentheses too deeply.
  */
 public final class RsqlDialect {
 
@@ -44,6 +45,15 @@ public final class RsqlDialect {
      * The RSQL of the specification, whose arguments are read by {@link ArgumentParser#DEFAULT}.
      */
     public static final RsqlDialect DEFAULT = new RsqlDialect(defaultPredicates(), ArgumentParser.DEFAULT);
+
+    /**
+     * The number of levels the parentheses of an RSQL query may be nested to, far more than any filter written by
+     * hand or by a query builder needs: the parser, the translation into predicates and the persistence provider
+     * all recurse into each level, so that a few kilobytes of parentheses would otherwise overflow the stack.
+     *
+     * @see #parse(String)
+     */
+    public static final int MAX_NESTING_DEPTH = 64;
 
     private final Map<ComparisonOperator, ComparisonPredicate> predicates;
 
@@ -177,12 +187,63 @@ public final class RsqlDialect {
 
     /**
      * Gets the parser converting the RSQL queries into nodes, accepting exactly the operators of this dialect.
+     * <p>
+     * Parse the queries sent by the API consumers with {@link #parse(String)} rather than with this parser itself,
+     * whose stack a few kilobytes of parentheses are enough to overflow.
      *
      * @return The parser of this dialect, shared since it is immutable
-     * @see AbstractRsqlRepository#parse(String)
      */
     public RSQLParser parser() {
         return parser;
+    }
+
+    /**
+     * Parses an RSQL query into the nodes a {@link RsqlFilter} is resolved from, refusing a query nesting its
+     * parentheses deeper than {@value #MAX_NESTING_DEPTH} levels before the parser recurses into them.
+     *
+     * @param rsql The RSQL query to parse
+     * @return The corresponding nodes
+     * @throws RSQLParserException      if the query is not valid RSQL, or uses an operator this dialect does not hold
+     * @throws IllegalArgumentException if the query nests its parentheses deeper than {@value #MAX_NESTING_DEPTH}
+     *                                  levels
+     */
+    public Node parse(String rsql) {
+        requireNestingDepth(rsql);
+        return parser.parse(rsql);
+    }
+
+    /**
+     * Checks how deep the parentheses of an RSQL query are nested, counting them as the parser tokenizes them: a
+     * parenthesis within a quoted argument, where a backslash escapes the next character, nests nothing.
+     *
+     * @param rsql The RSQL query to check
+     * @throws IllegalArgumentException if the query nests its parentheses deeper than {@value #MAX_NESTING_DEPTH}
+     *                                  levels
+     */
+    private static void requireNestingDepth(String rsql) {
+        int depth = 0;
+        char quote = 0;
+        boolean escaped = false;
+        for (int index = 0; index < rsql.length(); index++) {
+            char character = rsql.charAt(index);
+            if (escaped) {
+                escaped = false;
+            } else if (quote != 0) {
+                escaped = character == '\\';
+                if (character == quote) {
+                    quote = 0;
+                }
+            } else if (character == '"' || character == '\'') {
+                quote = character;
+            } else if (character == '(') {
+                depth++;
+                if (depth > MAX_NESTING_DEPTH) {
+                    throw new IllegalArgumentException("Cannot filter with an RSQL query nesting its parentheses deeper than %d levels".formatted(MAX_NESTING_DEPTH));
+                }
+            } else if (character == ')') {
+                depth--;
+            }
+        }
     }
 
 }
