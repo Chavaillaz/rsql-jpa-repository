@@ -13,12 +13,12 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * {@code hibernate.properties} by default, or {@code postgresql}, {@code sqlserver} or {@code oracle}, started in a
  * container once for the whole run, so that what the databases disagree on is exercised on the databases themselves.
  */
-final class TestDatabase {
+public final class TestDatabase {
 
     /**
      * The database the tests run against, as the {@code database} system property names it.
      */
-    static final String NAME = System.getProperty("database", "h2");
+    public static final String NAME = System.getProperty("database", "h2");
 
     private static @Nullable JdbcDatabaseContainer<?> container;
 

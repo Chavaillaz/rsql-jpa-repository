@@ -103,8 +103,10 @@ instead, as `roaster.coffees.name==Geisha` does.
 ### Operators
 
 - **`==` and `!=`** compare a string to its argument as a pattern, ignoring the case, where `*` stands for any
-  characters as the `%` and `_` of SQL do, such as `name==*geisha*`. Anything else is compared to the very value
-  its argument spells, `==null` matching the entities having no such value and `!=null` those having one.
+  characters as the `%` and `_` of SQL do, such as `name==*geisha*`. The pattern is lowered in the root locale
+  rather than in the default one, so that the same filter means the same wherever the application runs. Anything
+  else is compared to the very value its argument spells, `==null` matching the entities having no such value and
+  `!=null` those having one.
 - **`=gt=`, `=ge=`, `=lt=` and `=le=`**, also written `>`, `>=`, `<` and `<=`, compare a property to the very value
   its argument spells, dates and times included: `packedAt=gt=2024-01-01T10:00:00` matches what was packed strictly
   after that instant.

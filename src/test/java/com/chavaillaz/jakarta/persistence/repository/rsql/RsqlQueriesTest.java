@@ -13,6 +13,7 @@ import static com.chavaillaz.jakarta.persistence.repository.example.Coffees.name
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assumptions.assumeThat;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Order;
@@ -47,6 +48,7 @@ import com.chavaillaz.jakarta.persistence.repository.Pageable;
 import com.chavaillaz.jakarta.persistence.repository.PaginationResult;
 import com.chavaillaz.jakarta.persistence.repository.RepositoryContext;
 import com.chavaillaz.jakarta.persistence.repository.Sort;
+import com.chavaillaz.jakarta.persistence.repository.TestDatabase;
 import com.chavaillaz.jakarta.persistence.repository.example.CoffeeEntity;
 import com.chavaillaz.jakarta.persistence.repository.example.Coffees;
 import com.chavaillaz.jakarta.persistence.repository.example.Roast;
@@ -440,6 +442,26 @@ class RsqlQueriesTest extends HibernateTest {
                     .as("a Thai default locale reads 2024 as a Buddhist year, 1481 in the Gregorian calendar")
                     .isOne();
             assertThat(count("packedAt=gt=2024-01-01T09:59:59")).isOne();
+        } finally {
+            Locale.setDefault(defaultLocale);
+        }
+    }
+
+    @Test
+    @DisplayName("matches a string pattern whatever the default locale, rather than lowering its I into one no database spells")
+    void matchesAPatternWhateverTheDefaultLocale() {
+        // H2 runs in this very JVM and lowers a column in the default locale, where a database server lowers in
+        // its own, so that only a server ever agrees with the root locale the pattern is lowered in
+        assumeThat(TestDatabase.NAME).as("a database lowering in its own process").isNotEqualTo("h2");
+        persist(coffee("Istanbul Roast"));
+
+        Locale defaultLocale = Locale.getDefault();
+        Locale.setDefault(Locale.of("tr", "TR"));
+        try {
+            assertThat(names("name==Istanbul*"))
+                    .as("a Turkish default locale lowers the I of Istanbul into a dotless one")
+                    .containsExactly("Istanbul Roast");
+            assertThat(count("name!=ISTANBUL*")).isEqualTo(7);
         } finally {
             Locale.setDefault(defaultLocale);
         }

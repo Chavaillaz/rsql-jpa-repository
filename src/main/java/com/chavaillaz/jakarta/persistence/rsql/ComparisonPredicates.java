@@ -3,6 +3,7 @@ package com.chavaillaz.jakarta.persistence.rsql;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
+import java.util.Locale;
 
 import org.jspecify.annotations.Nullable;
 
@@ -12,6 +13,11 @@ import org.jspecify.annotations.Nullable;
  * A string compared with {@code ==} or {@code !=} is matched against its argument as a pattern, where {@code *}
  * stands for any characters, ignoring the case, which is the RSQL convention; anything else is compared to the
  * very value its argument spells, the {@code null} literal comparing a property to nothing.
+ * <p>
+ * A pattern is lowered in the root locale rather than in the default one, so that the same filter means the same
+ * wherever the application runs: a Turkish or Azeri locale lowers the I of Istanbul into a dotless one, which the
+ * lower of the database never spells, so that {@code name==Istanbul*} would match nothing there and everything a
+ * consumer expects anywhere else.
  */
 final class ComparisonPredicates {
 
@@ -33,7 +39,7 @@ final class ComparisonPredicates {
             return criteriaBuilder.isNull(comparison.path());
         }
         if (value instanceof String text) {
-            return criteriaBuilder.like(criteriaBuilder.lower(comparison.path()), comparison.pattern(text).toLowerCase());
+            return criteriaBuilder.like(criteriaBuilder.lower(comparison.path()), comparison.pattern(text).toLowerCase(Locale.ROOT));
         }
         return criteriaBuilder.equal(comparison.path(), value);
     }
@@ -52,7 +58,7 @@ final class ComparisonPredicates {
             return criteriaBuilder.isNotNull(comparison.path());
         }
         if (value instanceof String text) {
-            return criteriaBuilder.notLike(criteriaBuilder.lower(comparison.path()), comparison.pattern(text).toLowerCase());
+            return criteriaBuilder.notLike(criteriaBuilder.lower(comparison.path()), comparison.pattern(text).toLowerCase(Locale.ROOT));
         }
         return criteriaBuilder.notEqual(comparison.path(), value);
     }
