@@ -13,6 +13,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
@@ -68,6 +69,12 @@ public class CoffeeEntity implements Identifiable<Long> {
      * Deliberately a legacy time of day, which the RSQL visitor compares within bounds holding a time of day of their own.
      */
     private Time servedUntil;
+
+    /**
+     * Deliberately a large object, which Hibernate refuses to lower for the RSQL visitor to match against a pattern.
+     */
+    @Lob
+    private String description;
 
     /**
      * Deliberately nullable, to prove that a nullable attribute cannot be used as a cursor key.

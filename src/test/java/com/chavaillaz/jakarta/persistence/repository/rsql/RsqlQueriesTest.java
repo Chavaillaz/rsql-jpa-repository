@@ -214,6 +214,25 @@ class RsqlQueriesTest extends HibernateTest {
     }
 
     /**
+     * The visitor matches a string against a pattern by lowering both, which Hibernate refuses for a string it does not
+     * hold as text, such as a large object, whatever the argument.
+     */
+    @Test
+    @DisplayName("rejects matching a pattern against a large object, as the illegal argument a consumer sent")
+    void rejectsAPatternAgainstALargeObject() {
+        assertThat((long) withCriteria("description==null", (context, criteria) -> queries().count(context, null, criteria)))
+                .as("a comparison to null matches no pattern")
+                .isEqualTo(7);
+        assertThatIllegalArgumentException()
+                .as("Hibernate refused it with a SemanticException, which an API layer answers with a 500")
+                .isThrownBy(() -> withCriteria("description==*floral*", (context, criteria) -> queries().count(context, null, criteria)))
+                .withMessage("Cannot filter on property description with ==");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> withCriteria("notes.flavour==Citrus;description!=Citrus", (context, criteria) -> queries().count(context, null, criteria)))
+                .withMessage("Cannot filter on property description with !=");
+    }
+
+    /**
      * The visitor parses a date leniently, rolling an impossible day over and ignoring whatever follows the pattern it
      * matches first, such as the minutes of a time written without its seconds.
      */

@@ -103,16 +103,18 @@ but seconds for the database to bind, or which is written with more than `RsqlQu
 whose digits take the JDK seconds to parse by the hundred thousand. So is a string pattern holding more than
 `RsqlQueries.MAX_WILDCARDS` wildcards, `*` or `%`, not counting those ending it, such as `name==*e*e*e*e*x`, which
 can take H2 seconds to match against a single value, `==` and `!=` matching a string against their argument as a
-pattern. So is an argument compared to a collection as a whole, `null` included, such as `roaster.coffees==null`, which
-Hibernate would otherwise only refuse once rendering the statement, and an argument holding a NUL character, which
-PostgreSQL would otherwise refuse once executing the statement. A boolean argument is read from `true` or `false` only,
-whatever its case, so that `organic==yes` is refused rather than silently read as `false`, and a `java.util.Date`
-argument as written only, in the Gregorian calendar whatever the default locale of the server, either as a date such as
-`2024-01-01` or as a date time such as `2024-01-01T10:00:00`, with a year of four digits, so that `2024-01-01T10:00` is
-refused rather than silently read as midnight, and `300000-01-01` rather than refused by PostgreSQL once executing the
-statement. Such a date is compared by `=gt=`, `=ge=`, `=lt=` and `=le=` to that very instant, which rsql-jpa would
-otherwise move a whole day later or earlier for an exclusive comparison, and compare within a `between` whose other
-bound holds the time of day rsql-jpa was loaded at, leaving part of the day out of the comparison of a time.
+pattern, and so is any pattern matched against a string not held as text, such as a `@Lob` one, which Hibernate would
+otherwise refuse to lower for the comparison. So is an argument compared to a collection as a whole, `null` included,
+such as `roaster.coffees==null`, which Hibernate would otherwise only refuse once rendering the statement, and an
+argument holding a NUL character, which PostgreSQL would otherwise refuse once executing the statement. A boolean
+argument is read from `true` or `false` only, whatever its case, so that `organic==yes` is refused rather than silently
+read as `false`, and a `java.util.Date` argument as written only, in the Gregorian calendar whatever the default locale
+of the server, either as a date such as `2024-01-01` or as a date time such as `2024-01-01T10:00:00`, with a year of
+four digits, so that `2024-01-01T10:00` is refused rather than silently read as midnight, and `300000-01-01` rather than
+refused by PostgreSQL once executing the statement. Such a date is compared by `=gt=`, `=ge=`, `=lt=` and `=le=` to that
+very instant, which rsql-jpa would otherwise move a whole day later or earlier for an exclusive comparison, and compare
+within a `between` whose other bound holds the time of day rsql-jpa was loaded at, leaving part of the day out of the
+comparison of a time.
 
 ## Combining with typed queries
 

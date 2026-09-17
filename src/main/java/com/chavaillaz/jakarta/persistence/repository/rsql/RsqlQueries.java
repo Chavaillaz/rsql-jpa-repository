@@ -29,6 +29,7 @@ import cz.jirutka.rsql.parser.ast.OrNode;
 import cz.jirutka.rsql.parser.ast.RSQLOperators;
 import org.apache.commons.lang3.StringUtils;
 import org.hibernate.query.sqm.TerminalPathException;
+import org.hibernate.query.sqm.produce.function.FunctionArgumentException;
 import org.jspecify.annotations.Nullable;
 
 import com.chavaillaz.jakarta.persistence.repository.Criteria;
@@ -235,9 +236,10 @@ public class RsqlQueries<E> {
      * at each application.
      * <p>
      * An argument the visitor cannot parse for the type of its property, a pattern holding more wildcards than
-     * {@link #MAX_WILDCARDS} allows, or a selector the visitor cannot navigate, such as one reaching through a basic
-     * attribute, is a malformed filter sent by an API consumer: the criteria raise it as an
-     * {@link IllegalArgumentException} when applied, which a query does before issuing any statement.
+     * {@link #MAX_WILDCARDS} allows or matched against a string not held as text, such as a large object, or a selector
+     * the visitor cannot navigate, such as one reaching through a basic attribute, is a malformed filter sent by an API
+     * consumer: the criteria raise it as an {@link IllegalArgumentException} when applied, which a query does before
+     * issuing any statement.
      *
      * @param context  The repository the query is written for
      * @param rsqlNode The parsed RSQL query
@@ -270,6 +272,10 @@ public class RsqlQueries<E> {
                         // An unparsable argument, or a selector reaching through a basic attribute such as name.origin,
                         // which the API layer answers with a 400 only as an IllegalArgumentException
                         throw new IllegalArgumentException(e.getMessage(), e);
+                    } catch (FunctionArgumentException e) {
+                        // The visitor matches a string against a pattern by lowering both, which Hibernate refuses for a
+                        // string it does not hold as text, such as a large object or a number behind a converter
+                        throw new IllegalArgumentException("Cannot filter on property %s with %s".formatted(node.getSelector(), node.getOperator()), e);
                     } catch (ClassCastException e) {
                         // The visitor joins an association from whichever path it last stepped into, which is no join
                         // past a basic attribute, such as name.roaster.name, nor past the to-one association of a join,
