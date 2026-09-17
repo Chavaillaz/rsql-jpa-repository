@@ -4,8 +4,6 @@ import static org.apache.commons.lang3.StringUtils.isBlank;
 
 import jakarta.persistence.EntityManager;
 
-import com.github.tennaito.rsql.jpa.JpaPredicateVisitor;
-import cz.jirutka.rsql.parser.RSQLParser;
 import cz.jirutka.rsql.parser.RSQLParserException;
 import cz.jirutka.rsql.parser.ast.Node;
 import org.jspecify.annotations.Nullable;
@@ -38,30 +36,13 @@ public abstract class AbstractRsqlRepository<E extends Identifiable<I>, I> exten
     public static final int MAX_NESTING_DEPTH = 64;
 
     /**
-     * The parser converting the RSQL queries into nodes.
-     */
-    protected final RSQLParser rsqlParser;
-
-    /**
-     * Creates a repository using the default RSQL parser.
+     * Creates a repository.
      *
      * @param entityManager The entity manager the repository operates on
      * @param entityType    The type of the managed entity
      */
     protected AbstractRsqlRepository(EntityManager entityManager, Class<E> entityType) {
-        this(entityManager, entityType, new RSQLParser());
-    }
-
-    /**
-     * Creates a repository using the given RSQL parser, to support custom operators for instance.
-     *
-     * @param entityManager The entity manager the repository operates on
-     * @param entityType    The type of the managed entity
-     * @param rsqlParser    The parser used to build the RSQL query nodes
-     */
-    protected AbstractRsqlRepository(EntityManager entityManager, Class<E> entityType, RSQLParser rsqlParser) {
         super(entityManager, entityType);
-        this.rsqlParser = rsqlParser;
     }
 
     /**
@@ -72,6 +53,26 @@ public abstract class AbstractRsqlRepository<E extends Identifiable<I>, I> exten
      */
     protected RsqlQueries<E> rsqlQueries() {
         return RsqlQueries.of(entityType);
+    }
+
+    /**
+     * Gets the RSQL the API consumers of this repository write their filters in: the comparison operators the
+     * queries may use, the predicate each of them builds and how the arguments of a comparison are read,
+     * {@link RsqlDialect#DEFAULT} by default.
+     * <p>
+     * Override to support an operator or an argument type of its own, holding the dialect in a constant since it
+     * is immutable:
+     * <pre>{@code
+     * @Override
+     * protected RsqlDialect rsqlDialect() {
+     *     return DIALECT;
+     * }
+     * }</pre>
+     *
+     * @return The dialect the queries are parsed and translated with
+     */
+    protected RsqlDialect rsqlDialect() {
+        return RsqlDialect.DEFAULT;
     }
 
     @Override
@@ -112,21 +113,22 @@ public abstract class AbstractRsqlRepository<E extends Identifiable<I>, I> exten
     }
 
     /**
-     * Parses an RSQL query into the nodes {@link #toCriteria(Node)} translates, refusing a query nesting its
-     * parentheses deeper than {@value #MAX_NESTING_DEPTH} levels before the parser recurses into them.
+     * Parses an RSQL query into the nodes {@link #toCriteria(Node)} translates, with the
+     * {@link RsqlDialect#parser() parser of the dialect}, refusing a query nesting its parentheses deeper than
+     * {@value #MAX_NESTING_DEPTH} levels before the parser recurses into them.
      * <p>
-     * Parse the queries sent by the API consumers with this method rather than with the {@link #rsqlParser} itself,
-     * whose stack a few kilobytes of parentheses are enough to overflow.
+     * Parse the queries sent by the API consumers with this method rather than with that parser itself, whose
+     * stack a few kilobytes of parentheses are enough to overflow.
      *
      * @param rsql The RSQL query to parse
      * @return The corresponding nodes
-     * @throws RSQLParserException      if the query is not valid RSQL
+     * @throws RSQLParserException      if the query is not valid RSQL, or uses an operator the dialect does not hold
      * @throws IllegalArgumentException if the query nests its parentheses deeper than {@value #MAX_NESTING_DEPTH}
      *                                  levels
      */
     protected Node parse(String rsql) {
         requireNestingDepth(rsql);
-        return rsqlParser.parse(rsql);
+        return rsqlDialect().parser().parse(rsql);
     }
 
     /**
@@ -169,26 +171,12 @@ public abstract class AbstractRsqlRepository<E extends Identifiable<I>, I> exten
      *
      * @param rsqlNode The parsed RSQL query
      * @return The corresponding criteria
-     * @throws IllegalArgumentException if the query refers to a property that is not searchable
-     * @see RsqlQueries#toCriteria(com.chavaillaz.jakarta.persistence.repository.RepositoryContext, Node, java.util.function.Supplier)
+     * @throws IllegalArgumentException if the query refers to a property that is neither searchable nor one the
+     *                                  entities can be filtered on, or uses an operator the dialect does not hold
+     * @see RsqlQueries#toCriteria(com.chavaillaz.jakarta.persistence.repository.RepositoryContext, Node, RsqlDialect)
      */
     protected Criteria<E> toCriteria(Node rsqlNode) {
-        return rsqlQueries().toCriteria(context(), rsqlNode, this::createPredicateVisitor);
-    }
-
-    /**
-     * Creates the visitor converting an RSQL comparison into a predicate on the managed entity, called for each
-     * comparison every time the criteria of a query are applied, the logical nodes being combined by
-     * {@link RsqlQueries#toCriteria(com.chavaillaz.jakarta.persistence.repository.RepositoryContext, Node, java.util.function.Supplier)}.
-     * <p>
-     * Override to customize the property mapping, the argument parsing or the predicate building, through the
-     * builder tools of the visitor. Start from {@link RsqlQueries#defaultPredicateVisitor(Class)} and customize the
-     * tools it holds rather than replacing them, so that the arguments its parser refuses stay refused.
-     *
-     * @return The visitor to use to build the predicate
-     */
-    protected JpaPredicateVisitor<E> createPredicateVisitor() {
-        return RsqlQueries.defaultPredicateVisitor(entityType);
+        return rsqlQueries().toCriteria(context(), rsqlNode, rsqlDialect());
     }
 
 }

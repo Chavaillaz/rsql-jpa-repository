@@ -1,36 +1,20 @@
 package com.chavaillaz.jakarta.persistence.repository.rsql;
 
-import jakarta.persistence.criteria.CommonAbstractCriteria;
 import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.Expression;
-import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
-import jakarta.persistence.metamodel.PluralAttribute;
 import java.math.BigDecimal;
-import java.util.Date;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Supplier;
+import java.util.function.BiFunction;
 
-import com.github.tennaito.rsql.jpa.JpaPredicateVisitor;
-import com.github.tennaito.rsql.jpa.PredicateBuilder;
-import com.github.tennaito.rsql.misc.ArgumentFormatException;
-import com.github.tennaito.rsql.misc.DefaultArgumentParser;
-import com.github.tennaito.rsql.misc.EntityManagerAdapter;
 import cz.jirutka.rsql.parser.ast.AndNode;
 import cz.jirutka.rsql.parser.ast.ComparisonNode;
-import cz.jirutka.rsql.parser.ast.ComparisonOperator;
 import cz.jirutka.rsql.parser.ast.LogicalNode;
 import cz.jirutka.rsql.parser.ast.NoArgRSQLVisitorAdapter;
 import cz.jirutka.rsql.parser.ast.Node;
 import cz.jirutka.rsql.parser.ast.OrNode;
-import cz.jirutka.rsql.parser.ast.RSQLOperators;
-import org.apache.commons.lang3.StringUtils;
-import org.hibernate.query.sqm.TerminalPathException;
 import org.hibernate.query.sqm.produce.function.FunctionArgumentException;
-import org.jspecify.annotations.Nullable;
 
 import com.chavaillaz.jakarta.persistence.repository.Criteria;
 import com.chavaillaz.jakarta.persistence.repository.EntityOrdering;
@@ -42,13 +26,13 @@ import com.chavaillaz.jakarta.persistence.repository.RepositoryContext;
  * {@link EntityQueries queries} of the entity apply like any other.
  * <p>
  * The predicate is built on the root each query hands over, so that a cursor query checks and selects its keys
- * exactly as for criteria written by hand, and each comparison joining an association or reaching through a
- * collection is evaluated in a correlated {@code exists} subquery of its own. Every selector is first
- * {@link #resolveProperties(RepositoryContext, Node) resolved} against the searchable properties of the repository,
- * so that the very same restriction and public naming govern the filtering and the sorting.
+ * exactly as for criteria written by hand. Every selector is resolved against the searchable properties of the
+ * repository, so that the very same restriction and public naming govern the filtering and the sorting, and then
+ * against the metamodel, so that a selector the entities cannot be filtered on is refused before anything is
+ * built, see {@link #compare(RepositoryContext, ComparisonNode, RsqlDialect)}.
  * <p>
  * One instance is shared by every repository over the same entity, what belongs to a repository travelling with
- * the {@link RepositoryContext} of each call.
+ * the {@link RepositoryContext} of each call, and the operators of the queries with the {@link RsqlDialect}.
  *
  * @param <E> The type of the managed entity
  */
@@ -63,20 +47,22 @@ public class RsqlQueries<E> {
     public static final int MAX_DECIMAL_SCALE = 1000;
 
     /**
-     * The largest number of characters a decimal argument may be written with, twice {@link #MAX_DECIMAL_SCALE}, enough
-     * to spell out any value a numeric column may be declared to hold. The JDK parses the digits of a decimal in
-     * quadratic time, and a query parses each argument four times, so that the quarter of a megabyte of digits a
-     * consumer is free to send in the body of a request would otherwise take some 5 seconds to parse, only for H2 to
-     * refuse the value.
+     * The largest number of characters a decimal or integer argument may be written with, twice
+     * {@link #MAX_DECIMAL_SCALE}, enough to spell out any value a numeric column may be declared to hold. The JDK
+     * parses the digits of such a number in quadratic time, and the criteria of a query are applied more than once,
+     * so that the quarter of a megabyte of digits a consumer is free to send in the body of a request would otherwise
+     * take seconds to parse, only for H2 to refuse the value.
      */
     public static final int MAX_DECIMAL_LENGTH = 2 * MAX_DECIMAL_SCALE;
 
     /**
      * The largest number of wildcards, {@code *} or {@code %}, the argument of an {@code ==} or {@code !=} comparison
-     * of a string may hold, not counting those ending it. rsql-jpa matches such a string against the argument with a
+     * of a string may hold, not counting those ending it. Such a string is matched against its argument with a
      * {@code like}, which H2 evaluates by trying every position of the value each wildcard may stand for, so that each
      * wildcard followed by more of the pattern multiplies the work by up to the length of the value: the few bytes of
      * {@code *e*e*e*e*x} would otherwise take H2 some 24 seconds to match against a single string of 255 e.
+     *
+     * @see RsqlComparison#pattern(String)
      */
     public static final int MAX_WILDCARDS = 3;
 
@@ -92,21 +78,6 @@ public class RsqlQueries<E> {
         }
 
     };
-
-    /**
-     * The argument parser of the default visitor, shared since it holds no state.
-     */
-    private static final DefaultArgumentParser ARGUMENT_PARSER = new StrictArgumentParser();
-
-    /**
-     * The ordering comparisons of a date, built here rather than by the visitor, keyed by their operator, see
-     * {@link #compare(ComparisonNode, CriteriaBuilder, CommonAbstractCriteria, Root, EntityManagerAdapter, Supplier)}.
-     */
-    private static final Map<ComparisonOperator, DateComparison> DATE_COMPARISONS = Map.of(
-            RSQLOperators.GREATER_THAN, CriteriaBuilder::greaterThan,
-            RSQLOperators.GREATER_THAN_OR_EQUAL, CriteriaBuilder::greaterThanOrEqualTo,
-            RSQLOperators.LESS_THAN, CriteriaBuilder::lessThan,
-            RSQLOperators.LESS_THAN_OR_EQUAL, CriteriaBuilder::lessThanOrEqualTo);
 
     /**
      * The type of the managed entity.
@@ -157,272 +128,113 @@ public class RsqlQueries<E> {
     }
 
     /**
-     * Creates the default visitor converting an RSQL query node into a predicate on the managed entity.
+     * Translates an RSQL query into criteria, its selectors being resolved on the spot and its predicate being
+     * built on whichever root a query applies the criteria to.
      * <p>
-     * Its argument parser refuses, as arguments their property cannot be parsed from, any argument compared to a
-     * collection as a whole, {@code null} included, which rsql-jpa reads before even looking at the type of the
-     * property, any argument holding a NUL character, which PostgreSQL refuses in any text, and a decimal written
-     * with more than {@value #MAX_DECIMAL_LENGTH} characters or whose scale lies beyond {@value #MAX_DECIMAL_SCALE},
-     * negative or positive. It also refuses a boolean other than {@code true} or {@code false}, whatever its case,
-     * which rsql-jpa silently reads as {@code false}, a {@link Date} not written as {@code yyyy-MM-dd} or
-     * {@code yyyy-MM-dd'T'HH:mm:ss}, which rsql-jpa reads leniently, and a date past the year 9999, which PostgreSQL
-     * refuses to bind beyond the year 294276. It reads a date in the Gregorian calendar whatever the default locale,
-     * rather than in a Buddhist year under a Thai one, as rsql-jpa does.
-     * <p>
-     * Customize the builder tools the visitor holds, rather than replacing them or their argument parser, so that
-     * those arguments stay refused.
-     *
-     * @param <E>        The type of the managed entity
-     * @param entityType The type of the managed entity
-     * @return The corresponding visitor
-     */
-    @SuppressWarnings("unchecked")
-    public static <E> JpaPredicateVisitor<E> defaultPredicateVisitor(Class<E> entityType) {
-        // The visitor guesses its entity type from a generic varargs array, which the explicit type then replaces
-        JpaPredicateVisitor<E> visitor = new JpaPredicateVisitor<>();
-        visitor.setEntityClass(entityType);
-        visitor.getBuilderTools().setArgumentParser(ARGUMENT_PARSER);
-        return visitor;
-    }
-
-    /**
-     * Rewrites the selector of every comparison node of the given RSQL query into the entity attribute path it
-     * resolves to, so that the very same searchable properties of the repository restrict both the ordering and
-     * the RSQL filtering, and decouple the public naming from the entity one for both.
+     * The logical nodes are combined here, each comparison building a predicate of its own, so that a comparison
+     * reaching through an association or a collection can be evaluated in a correlated {@code exists} subquery of
+     * its own, see {@link #compare(RepositoryContext, ComparisonNode, RsqlDialect)}.
      *
      * @param context  The repository the query is written for
-     * @param rsqlNode The RSQL query to resolve
-     * @return The corresponding query, its selectors replaced by the resolved entity attribute paths
-     * @throws IllegalArgumentException if the query refers to a property that is not searchable
-     * @see EntityOrdering#resolveProperty(RepositoryContext, String)
+     * @param rsqlNode The parsed RSQL query
+     * @param dialect  The dialect the operators of the query are translated with
+     * @return The corresponding criteria
+     * @throws IllegalArgumentException if the query uses an operator the dialect does not hold, or refers to a
+     *                                  property that is neither searchable nor one the entities can be filtered on
      */
-    public Node resolveProperties(RepositoryContext<E> context, Node rsqlNode) {
-        return rsqlNode.accept(new NoArgRSQLVisitorAdapter<>() {
+    public Criteria<E> toCriteria(RepositoryContext<E> context, Node rsqlNode, RsqlDialect dialect) {
+        return rsqlNode.accept(new NoArgRSQLVisitorAdapter<Criteria<E>>() {
 
             @Override
-            public Node visit(AndNode node) {
-                return node.withChildren(rewrite(node));
-            }
-
-            @Override
-            public Node visit(OrNode node) {
-                return node.withChildren(rewrite(node));
+            public Criteria<E> visit(AndNode node) {
+                return combine(node, CriteriaBuilder::and);
             }
 
             @Override
-            public Node visit(ComparisonNode node) {
-                return node.withSelector(ordering.resolveProperty(context, node.getSelector()));
+            public Criteria<E> visit(OrNode node) {
+                return combine(node, CriteriaBuilder::or);
             }
 
-            private List<Node> rewrite(LogicalNode node) {
-                return node.getChildren().stream().map(child -> child.accept(this)).toList();
+            @Override
+            public Criteria<E> visit(ComparisonNode node) {
+                return compare(context, node, dialect);
             }
+
+            private Criteria<E> combine(LogicalNode node, BiFunction<CriteriaBuilder, Predicate[], Predicate> operator) {
+                List<Criteria<E>> children = node.getChildren().stream()
+                        .map(child -> child.<Criteria<E>, Void>accept(this))
+                        .toList();
+                return (criteriaBuilder, query, root) -> operator.apply(criteriaBuilder, children.stream()
+                        .map(child -> child.toPredicate(criteriaBuilder, query, root))
+                        .toArray(Predicate[]::new));
+            }
+
         });
     }
 
     /**
-     * Translates an RSQL query into criteria, its selectors being resolved against the searchable properties on
-     * the spot, and its predicate being built on whichever root a query applies the criteria to.
+     * Translates a single comparison of an RSQL query into criteria, in a correlated {@code exists} subquery of
+     * its own when the compared property is reached through an association or a collection.
      * <p>
-     * The visitor inner joins the association a selector reaches through, and Hibernate implicitly joins a collection
-     * the visitor reaches through with a plain path, such as an element collection, both of which drop the entities
-     * having no associated row before any predicate is evaluated, keeping them from matching another alternative of
-     * an OR, and repeat an entity for each matching element. A comparison joining anything or reaching through a
-     * collection is therefore evaluated in a correlated {@code exists} subquery of its own, where the join only
-     * restricts that comparison, the logical nodes being combined here rather than by the visitor.
+     * An association is joined with an inner join, and a collection has its elements compared one by one, both of
+     * which would otherwise drop the entities having no associated row before any predicate is evaluated, keeping
+     * them from matching another alternative of an OR, and repeat an entity once per matching element. Within the
+     * subquery, the join only restricts that very comparison.
      * <p>
-     * A query applies criteria more than once, first to a throwaway root, see {@link Criteria#toPredicate}, and a
-     * visitor holds the root it builds on: a visitor is therefore taken from the given provider for each comparison
-     * at each application.
-     * <p>
-     * An argument the visitor cannot parse for the type of its property, a pattern holding more wildcards than
-     * {@link #MAX_WILDCARDS} allows or matched against a string not held as text, such as a large object, or a selector
-     * the visitor cannot navigate, such as one reaching through a basic attribute, is a malformed filter sent by an API
-     * consumer: the criteria raise it as an {@link IllegalArgumentException} when applied, which a query does before
-     * issuing any statement.
+     * The selector is resolved and the operator is looked up here, before any criteria are built, so that a
+     * malformed filter is refused as the {@link IllegalArgumentException} an API consumer is answered a
+     * {@code 400 Bad Request} to, whether or not a query is ever run with it. The arguments are read and the
+     * property is navigated once the criteria are applied, which a query does before issuing any statement.
      *
-     * @param context  The repository the query is written for
-     * @param rsqlNode The parsed RSQL query
-     * @param visitors The provider of the visitor building the predicate of a comparison, called for each
-     *                 comparison at each application
+     * @param context The repository the query is written for
+     * @param node    The comparison to translate
+     * @param dialect The dialect the operator of the comparison is translated with
      * @return The corresponding criteria
-     * @throws IllegalArgumentException if the query refers to a property that is not searchable
+     * @throws IllegalArgumentException if the dialect does not hold the operator of the comparison, or if its
+     *                                  selector is neither searchable nor one the entities can be filtered on
      */
-    public Criteria<E> toCriteria(RepositoryContext<E> context, Node rsqlNode, Supplier<? extends JpaPredicateVisitor<E>> visitors) {
-        Node resolved = resolveProperties(context, rsqlNode);
+    protected Criteria<E> compare(RepositoryContext<E> context, ComparisonNode node, RsqlDialect dialect) {
+        ComparisonPredicate predicate = dialect.predicate(node.getOperator());
+        if (predicate == null) {
+            throw new IllegalArgumentException("Cannot filter on property %s with unknown operator %s".formatted(node.getSelector(), node.getOperator()));
+        }
+
+        PropertyPath property = PropertyPath.resolve(
+                context.entityManager().getMetamodel(),
+                entityType,
+                node.getSelector(),
+                ordering.resolveProperty(context, node.getSelector()));
+
         return (criteriaBuilder, query, root) -> {
-            EntityManagerAdapter adapter = new EntityManagerAdapter(context.entityManager()::getMetamodel, () -> criteriaBuilder);
-            return resolved.accept(new NoArgRSQLVisitorAdapter<Predicate>() {
+            if (!property.joins()) {
+                return toPredicate(predicate, new RsqlComparison(node, property, dialect, criteriaBuilder, query, root));
+            }
 
-                @Override
-                public Predicate visit(AndNode node) {
-                    return criteriaBuilder.and(combine(node));
-                }
-
-                @Override
-                public Predicate visit(OrNode node) {
-                    return criteriaBuilder.or(combine(node));
-                }
-
-                @Override
-                public Predicate visit(ComparisonNode node) {
-                    try {
-                        return compare(node, criteriaBuilder, query, root, adapter, visitors);
-                    } catch (ArgumentFormatException | TerminalPathException e) {
-                        // An unparsable argument, or a selector reaching through a basic attribute such as name.origin,
-                        // which the API layer answers with a 400 only as an IllegalArgumentException
-                        throw new IllegalArgumentException(e.getMessage(), e);
-                    } catch (FunctionArgumentException e) {
-                        // The visitor matches a string against a pattern by lowering both, which Hibernate refuses for a
-                        // string it does not hold as text, such as a large object or a number behind a converter
-                        throw new IllegalArgumentException("Cannot filter on property %s with %s".formatted(node.getSelector(), node.getOperator()), e);
-                    } catch (ClassCastException e) {
-                        // The visitor joins an association from whichever path it last stepped into, which is no join
-                        // past a basic attribute, such as name.roaster.name, nor past the to-one association of a join,
-                        // such as notes.coffee.roaster.name; the JVM omits the message of a cast failing that often
-                        throw new IllegalArgumentException("Cannot filter on property " + node.getSelector(), e);
-                    }
-                }
-
-                private Predicate[] combine(LogicalNode node) {
-                    return node.getChildren().stream().map(child -> child.accept(this)).toArray(Predicate[]::new);
-                }
-            });
+            // Comparing the two roots as entities correlates them on the identifier, whatever it is made of
+            Subquery<Integer> matching = query.subquery(Integer.class);
+            Root<E> matched = matching.from(entityType);
+            Predicate comparison = toPredicate(predicate, new RsqlComparison(node, property, dialect, criteriaBuilder, matching, matched));
+            return criteriaBuilder.exists(matching.select(criteriaBuilder.literal(1))
+                    .where(criteriaBuilder.equal(matched, root), comparison));
         };
     }
 
     /**
-     * Builds the predicate of a single comparison, in a correlated {@code exists} subquery of its own when it joins
-     * anything or reaches through a collection, see {@link #toCriteria(RepositoryContext, Node, Supplier)}.
-     * <p>
-     * What the visitor joins is only known once it is applied, so the comparison is first applied to a throwaway
-     * root, which issues no query. A collection it reaches through without joining it only shows in the path it
-     * navigates on that root, as the type of the property it compares does, which tells whether it matches a string
-     * against a pattern, see {@link #MAX_WILDCARDS}.
-     * <p>
-     * rsql-jpa compares a date with a between, whose bound it moves a whole day away for an exclusive comparison, the
-     * other bound being the first day of the year 5 or the last one of the year 9999, in the calendar of the default
-     * locale and at the time of day rsql-jpa was loaded, which leaves part of the day out of the comparison of a time:
-     * an ordering comparison of a date is therefore built here instead, on the path and with the argument the visitor
-     * navigates and parses.
+     * Builds the predicate of a comparison, as the illegal argument a filter the persistence provider refuses is.
      *
-     * @param node            The comparison to build the predicate of
-     * @param criteriaBuilder The builder to use
-     * @param query           The query being built, to create the subquery from
-     * @param root            The root entity of the query
-     * @param adapter         The metamodel and the builder the visitor works with
-     * @param visitors        The provider of the visitor building the predicate
+     * @param predicate  The predicate of the operator of the comparison
+     * @param comparison The comparison to build the predicate of
      * @return The corresponding predicate
+     * @throws IllegalArgumentException if the provider refuses the comparison
      */
-    private Predicate compare(ComparisonNode node, CriteriaBuilder criteriaBuilder, CommonAbstractCriteria query, Root<E> root, EntityManagerAdapter adapter, Supplier<? extends JpaPredicateVisitor<E>> visitors) {
-        Root<E> probe = criteriaBuilder.createQuery(entityType).from(entityType);
-        JpaPredicateVisitor<E> visitor = visitors.get();
-        node.accept(visitor.defineRoot(probe), adapter);
-        Path<?> path = PredicateBuilder.findPropertyPath(node.getSelector(), probe, adapter, visitor.getBuilderTools());
-        requireWildcards(node, path);
-        Date bound = dateBound(node, path, visitor);
-        if (probe.getJoins().isEmpty() && !reachesThroughCollection(path)) {
-            return apply(node, bound, root, criteriaBuilder, adapter, visitors);
+    private static Predicate toPredicate(ComparisonPredicate predicate, RsqlComparison comparison) {
+        try {
+            return predicate.toPredicate(comparison);
+        } catch (FunctionArgumentException e) {
+            // A string matched against a pattern is lowered, which Hibernate refuses for a string it does not hold
+            // as text, such as a large object or a number behind a converter, whatever the argument
+            throw comparison.unsupported(e);
         }
-
-        // Comparing the two roots as entities correlates them on the identifier, whatever it is made of
-        Subquery<Integer> matching = query.subquery(Integer.class);
-        Root<E> matched = matching.from(entityType);
-        Predicate predicate = apply(node, bound, matched, criteriaBuilder, adapter, visitors);
-        return criteriaBuilder.exists(matching.select(criteriaBuilder.literal(1)).where(criteriaBuilder.equal(matched, root), predicate));
-    }
-
-    /**
-     * Applies a comparison to the given root, through the visitor unless it is an ordering comparison of a date.
-     *
-     * @param node            The comparison to apply
-     * @param bound           The date an ordering comparison compares its property to, or {@code null} to apply the
-     *                        comparison through the visitor
-     * @param target          The root to apply the comparison to
-     * @param criteriaBuilder The builder to use
-     * @param adapter         The metamodel and the builder the visitor works with
-     * @param visitors        The provider of the visitor building the predicate
-     * @return The corresponding predicate
-     */
-    @SuppressWarnings("unchecked")
-    private Predicate apply(ComparisonNode node, @Nullable Date bound, Root<E> target, CriteriaBuilder criteriaBuilder, EntityManagerAdapter adapter, Supplier<? extends JpaPredicateVisitor<E>> visitors) {
-        JpaPredicateVisitor<E> visitor = visitors.get().defineRoot(target);
-        if (bound == null) {
-            return node.accept(visitor, adapter);
-        }
-        // The property is a date, see dateBound, reached through a single navigation of its path
-        Path<Date> path = (Path<Date>) PredicateBuilder.findPropertyPath(node.getSelector(), target, adapter, visitor.getBuilderTools());
-        return DATE_COMPARISONS.get(node.getOperator()).compare(criteriaBuilder, path, bound);
-    }
-
-    /**
-     * Checks that the argument of an {@code ==} or {@code !=} comparison of a string, which rsql-jpa matches the string
-     * against with a {@code like}, holds no more wildcards than {@link #MAX_WILDCARDS}.
-     *
-     * @param node The comparison
-     * @param path The path the visitor navigates for the comparison
-     * @throws IllegalArgumentException if the comparison matches a string against a pattern holding too many wildcards
-     */
-    private static void requireWildcards(ComparisonNode node, Path<?> path) {
-        boolean like = node.getOperator().equals(RSQLOperators.EQUAL) || node.getOperator().equals(RSQLOperators.NOT_EQUAL);
-        if (!like || !String.class.equals(path.getJavaType())) {
-            return;
-        }
-        // Those ending the pattern match the rest of a value at once, whatever its length
-        String pattern = StringUtils.stripEnd(node.getArguments().get(0), "*%");
-        if (pattern.chars().filter(character -> character == '*' || character == '%').count() > MAX_WILDCARDS) {
-            throw new IllegalArgumentException("Cannot filter on property %s with a pattern of more than %d wildcards".formatted(node.getSelector(), MAX_WILDCARDS));
-        }
-    }
-
-    /**
-     * Gets the date an ordering comparison of a date compares its property to, parsed as the visitor parses it.
-     *
-     * @param node    The comparison
-     * @param path    The path the visitor navigates for the comparison
-     * @param visitor The visitor, whose argument parser the date is parsed with
-     * @return The date to compare the property to, or {@code null} when the comparison is no ordering comparison of
-     *         a date, or compares it to {@code null}
-     */
-    private static @Nullable Date dateBound(ComparisonNode node, Path<?> path, JpaPredicateVisitor<?> visitor) {
-        if (!DATE_COMPARISONS.containsKey(node.getOperator()) || !Date.class.isAssignableFrom(path.getJavaType())) {
-            return null;
-        }
-        return (Date) visitor.getBuilderTools().getArgumentParser().parse(node.getArguments().get(0), path.getJavaType());
-    }
-
-    /**
-     * Checks whether a path is reached through a collection, which the visitor navigates with a plain path rather
-     * than a join when it is no association, such as an element collection, Hibernate then joining it implicitly.
-     *
-     * @param path The path a comparison is made on
-     * @return {@code true} if one of the paths it is reached through is a collection, {@code false} otherwise
-     */
-    private static boolean reachesThroughCollection(Path<?> path) {
-        for (Path<?> parent = path.getParentPath(); parent != null; parent = parent.getParentPath()) {
-            if (parent.getModel() instanceof PluralAttribute) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Builds the predicate of an ordering comparison of a date, such as {@link CriteriaBuilder#greaterThan}.
-     */
-    @FunctionalInterface
-    private interface DateComparison {
-
-        /**
-         * Builds the predicate comparing a date to its bound.
-         *
-         * @param criteriaBuilder The builder to use
-         * @param date            The date to compare
-         * @param bound           The date to compare it to
-         * @return The corresponding predicate
-         */
-        Predicate compare(CriteriaBuilder criteriaBuilder, Expression<Date> date, Date bound);
-
     }
 
 }

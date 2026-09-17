@@ -47,8 +47,9 @@ public class CoffeeRepositoryJpa extends AbstractRsqlRepository<CoffeeEntity, Lo
     }
 
     /**
-     * The public naming is deliberately decoupled from the entity one for the roaster and the tasting notes, so
-     * that the resolution of a nested path is covered, both for sorting and for RSQL filtering.
+     * The public naming is deliberately decoupled from the entity one for the roaster, the tasting notes and the
+     * cupper, so that the resolution of a nested path is covered, both for sorting and for RSQL filtering, the
+     * cupper being reached through an embeddable and an association.
      */
     @Override
     protected Map<String, String> searchableProperties() {
@@ -61,7 +62,8 @@ public class CoffeeRepositoryJpa extends AbstractRsqlRepository<CoffeeEntity, Lo
                 "organic", "organic",
                 "decaf", "decafLabel",
                 "roaster", "roaster.name",
-                "notes", "notes.flavour");
+                "notes", "notes.flavour",
+                "cupper", "cupping.cuppedBy.name");
     }
 
     @Override

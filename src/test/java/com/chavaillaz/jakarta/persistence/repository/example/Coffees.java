@@ -76,14 +76,18 @@ public final class Coffees {
                 coffee(BLUE_MOUNTAIN, JAMAICA, Roast.MEDIUM, "42.00", 5).addNote("Chocolate"),
                 coffee(BOURBON_POINTU, "Reunion", Roast.LIGHT, "55.50", 4).addNote("Floral"),
                 coffee(GEISHA, PANAMA, Roast.LIGHT, "80.00", 3).addNote("Jasmine").addNote("Citrus"),
-                coffee(HARRAR, ETHIOPIA, Roast.DARK, "18.00", 8).addNote("Blueberry"),
+                coffee(HARRAR, ETHIOPIA, Roast.DARK, "18.00", 8).addNote("Blueberry").addCertification("Fairtrade"),
                 coffee(KONA, "Hawaii", Roast.MEDIUM, "35.00", 6).addNote("Nutty"),
-                coffee(SIDAMO, ETHIOPIA, Roast.MEDIUM, "22.50", 7).addNote("Citrus"),
+                coffee(SIDAMO, ETHIOPIA, Roast.MEDIUM, "22.50", 7).addNote("Citrus").addCertification("Organic").addCertification("Fairtrade"),
                 coffee(YIRGACHEFFE, ETHIOPIA, Roast.LIGHT, "25.00", 4).addNote("Citrus").addNote("Floral"));
 
         coffees.forEach(coffee -> {
-            coffee.setRoaster(ETHIOPIA.equals(coffee.getOrigin()) ? kaldi : moka);
+            boolean ethiopian = ETHIOPIA.equals(coffee.getOrigin());
+            coffee.setRoaster(ethiopian ? kaldi : moka);
             coffee.setOrganic(coffee.getRoaster() == kaldi);
+            // Deliberately cupped by the other roaster, so that a selector reaching through the embeddable cannot
+            // be confused with the one reaching through the association of the coffee itself
+            coffee.cupped(ethiopian ? moka : kaldi, 80 + coffee.getStrength());
             entityManager.persist(coffee);
         });
         entityManager.flush();

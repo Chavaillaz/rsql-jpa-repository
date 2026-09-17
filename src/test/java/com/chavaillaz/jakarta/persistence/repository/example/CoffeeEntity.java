@@ -8,6 +8,7 @@ import static jakarta.persistence.GenerationType.IDENTITY;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -89,17 +90,42 @@ public class CoffeeEntity implements Identifiable<Long> {
     private List<TastingNoteEntity> notes = new ArrayList<>();
 
     /**
-     * The origins of a blend, an element collection the RSQL visitor reaches through without joining it.
+     * The origins of a blend, an element collection of embeddables, whose attributes are only reachable on the
+     * elements themselves.
      */
     @ElementCollection
     @CollectionTable(name = "coffee_blend")
     private List<BlendComponent> blend = new ArrayList<>();
+
+    /**
+     * The labels of the coffee, an element collection of basic values, which a comparison matches one by one.
+     */
+    @ElementCollection
+    @CollectionTable(name = "coffee_certification")
+    private List<String> certifications = new ArrayList<>();
+
+    /**
+     * How the beans scored, an embeddable a selector reaches an association through.
+     */
+    @Embedded
+    private Cupping cupping = new Cupping();
 
     public CoffeeEntity addNote(String flavour) {
         TastingNoteEntity note = new TastingNoteEntity();
         note.setFlavour(flavour);
         note.setCoffee(this);
         notes.add(note);
+        return this;
+    }
+
+    public CoffeeEntity addCertification(String certification) {
+        certifications.add(certification);
+        return this;
+    }
+
+    public CoffeeEntity cupped(RoasterEntity roaster, int score) {
+        cupping.setCuppedBy(roaster);
+        cupping.setScore(score);
         return this;
     }
 

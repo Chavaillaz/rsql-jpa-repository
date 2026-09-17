@@ -19,6 +19,8 @@ import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.function.Function;
 
+import cz.jirutka.rsql.parser.ast.Arity;
+import cz.jirutka.rsql.parser.ast.ComparisonOperator;
 import cz.jirutka.rsql.parser.ast.Node;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +37,7 @@ import com.chavaillaz.jakarta.persistence.repository.example.Roast;
 import com.chavaillaz.jakarta.persistence.repository.example.RoasterEntity;
 import com.chavaillaz.jakarta.persistence.repository.example.TastingNoteEntity;
 import com.chavaillaz.jakarta.persistence.repository.rsql.AbstractRsqlRepository;
+import com.chavaillaz.jakarta.persistence.repository.rsql.RsqlDialect;
 import com.chavaillaz.jakarta.persistence.repository.rsql.RsqlQueries;
 
 @DisplayName("Searching the coffee menu with an RSQL query")
@@ -213,7 +216,7 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     void rejectsAnUnparsableArgument(String rsql) {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> countAll(rsql))
-                .withMessageContaining("Cannot cast");
+                .withMessageStartingWith("Cannot filter on property");
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> searchAll(rsql));
     }
@@ -227,10 +230,10 @@ class CoffeeRsqlSearchTest extends HibernateTest {
         assertThat(countAll("price=gt=1e-" + limit)).isEqualTo(7);
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> countAll("price=lt=1e" + (limit + 1)))
-                .withMessage("Cannot cast '1e%d' to type class java.math.BigDecimal", limit + 1);
+                .withMessage("Cannot filter on property price with argument '1e%d', not a valid BigDecimal", limit + 1);
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> countAll("price=gt=1e-" + (limit + 1)))
-                .withMessage("Cannot cast '1e-%d' to type class java.math.BigDecimal", limit + 1);
+                .withMessage("Cannot filter on property price with argument '1e-%d', not a valid BigDecimal", limit + 1);
         assertThatIllegalArgumentException()
                 .as("H2 spent some 37 seconds binding such a decimal, only to refuse it")
                 .isThrownBy(() -> searchAll("price=in=(10,1e30000000)"));
@@ -244,9 +247,13 @@ class CoffeeRsqlSearchTest extends HibernateTest {
         assertThat(countAll("price=lt=" + digits)).isEqualTo(7);
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> countAll("price=lt=" + digits + "9"))
-                .withMessage("Cannot cast '%s9' to type class java.math.BigDecimal", digits);
+                .as("the argument is quoted abbreviated, a whole one flooding the logs of the application")
+                .satisfies(refusal -> assertThat(refusal.getMessage())
+                        .startsWith("Cannot filter on property price with argument '999")
+                        .endsWith("...', not a valid BigDecimal")
+                        .hasSizeLessThan(200));
         assertThatIllegalArgumentException()
-                .as("the JDK parses the digits of a decimal in quadratic time, and a search parses its arguments four times")
+                .as("the JDK parses the digits of a decimal in quadratic time, and a search parses its arguments more than once")
                 .isThrownBy(() -> searchAll("price=gt=" + "1".repeat(100_000)));
     }
 
@@ -275,7 +282,7 @@ class CoffeeRsqlSearchTest extends HibernateTest {
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> countAll("name==Gei" + nul + "sha"))
-                .withMessage("Cannot cast 'Gei%ssha' to type class java.lang.String", nul);
+                .withMessage("Cannot filter on property name with an argument holding a NUL character");
         assertThatIllegalArgumentException()
                 .as("PostgreSQL failed the statement with a DataException, which an API layer answers with a 500")
                 .isThrownBy(() -> searchAll("origin=in=(" + ETHIOPIA + ",Pan" + nul + "ama)"));
@@ -289,7 +296,7 @@ class CoffeeRsqlSearchTest extends HibernateTest {
         assertThatIllegalArgumentException()
                 .as("Boolean#valueOf would read it as false, matching the coffees that are not organic")
                 .isThrownBy(() -> countAll("organic==yes"))
-                .withMessage("Cannot cast 'yes' to type class java.lang.Boolean");
+                .withMessage("Cannot filter on property organic with argument 'yes', not a valid Boolean");
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> searchAll("organic=in=(true,1)"));
     }
@@ -324,6 +331,47 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     @DisplayName("resolves a searchable property to the entity attribute path it is aliased to")
     void resolvesAnAliasedPropertyForFiltering() {
         assertThat(countAll("roaster==\"Moka Brothers\"")).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("resolves a searchable property aliased to a path reaching through an embeddable and an association")
+    void resolvesADeepAliasedProperty() {
+        assertThat(namesOf(searchAll("cupper==\"Moka Brothers\"")))
+                .as("the Ethiopian coffees are roasted by Kaldi Roasting but cupped by Moka Brothers")
+                .containsExactly(HARRAR, SIDAMO, YIRGACHEFFE);
+    }
+
+    @Test
+    @DisplayName("parses and translates the queries with the dialect of the repository")
+    void honoursTheDialectOfTheRepository() {
+        List<CoffeeEntity> coffees = withRepository(LikeRepositoryJpa.class, repository -> repository.search("name=like=G*"));
+
+        assertThat(namesOf(coffees)).containsExactly(GEISHA);
+        assertThatThrownBy(() -> withRepository(repository -> repository.count("name=like=G*")))
+                .as("where the default dialect knows no such operator, and its parser refuses it")
+                .isInstanceOf(cz.jirutka.rsql.parser.RSQLParserException.class);
+    }
+
+    /**
+     * Adds an operator to the RSQL of the repository, which its parser has to accept and its translation to
+     * build, deliberately matching a pattern without ignoring the case as {@code ==} does.
+     */
+    private static class LikeRepositoryJpa extends CoffeeRepositoryJpa {
+
+        private static final ComparisonOperator LIKE = new ComparisonOperator("=like=", Arity.nary(1));
+
+        private static final RsqlDialect DIALECT = RsqlDialect.DEFAULT.withOperator(LIKE, comparison -> comparison.criteriaBuilder()
+                .like(comparison.path(), comparison.pattern(comparison.arguments().get(0))));
+
+        LikeRepositoryJpa(EntityManager entityManager) {
+            super(entityManager);
+        }
+
+        @Override
+        protected RsqlDialect rsqlDialect() {
+            return DIALECT;
+        }
+
     }
 
     @Test
