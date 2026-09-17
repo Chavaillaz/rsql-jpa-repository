@@ -1,5 +1,6 @@
 package com.chavaillaz.jakarta.persistence.rsql;
 
+import jakarta.persistence.PersistenceException;
 import jakarta.persistence.criteria.CommonAbstractCriteria;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Predicate;
@@ -16,7 +17,6 @@ import cz.jirutka.rsql.parser.ast.LogicalNode;
 import cz.jirutka.rsql.parser.ast.NoArgRSQLVisitorAdapter;
 import cz.jirutka.rsql.parser.ast.Node;
 import cz.jirutka.rsql.parser.ast.OrNode;
-import org.hibernate.query.sqm.produce.function.FunctionArgumentException;
 
 /**
  * An RSQL query resolved against the model of an entity, ready to build its predicate on whichever root a query
@@ -183,9 +183,10 @@ public final class RsqlFilter<E> {
     private static Predicate toPredicate(ComparisonPredicate predicate, RsqlComparison comparison) {
         try {
             return predicate.toPredicate(comparison);
-        } catch (FunctionArgumentException e) {
-            // A string matched against a pattern is lowered, which Hibernate refuses for a string it does not hold
-            // as text, such as a large object or a number behind a converter, whatever the argument
+        } catch (PersistenceException e) {
+            // What the persistence provider raises for a comparison it cannot build, such as the lowering of a
+            // string it does not hold as text, a large object or a number behind a converter, whatever the
+            // argument: nothing here has reached the database yet, so that a refusal can only be the filter
             throw comparison.unsupported(e);
         }
     }
