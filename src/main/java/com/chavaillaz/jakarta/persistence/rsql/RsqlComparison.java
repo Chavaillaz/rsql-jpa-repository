@@ -222,15 +222,22 @@ public final class RsqlComparison {
     }
 
     /**
-     * Reads the only argument of the comparison as the type of the compared property.
+     * Reads the only argument of the comparison as the type of the compared property, for an operator taking one,
+     * which is every operator but those of an {@link cz.jirutka.rsql.parser.ast.Arity arity} of zero.
      *
      * @return The corresponding value, or {@code null} when the argument is the {@code null} literal
      * @throws IllegalArgumentException if the argument is no valid value of that type, or one the mapping of the
-     *                                  property cannot hold
+     *                                  property cannot hold, or if the operator of the comparison carries none
      * @see #parse(String, Class)
      */
     public @Nullable Object value() {
-        return read(arguments().get(0));
+        List<String> arguments = arguments();
+        if (arguments.isEmpty()) {
+            // The predicate of an operator declared to take no argument asked for one, which only the dialect
+            // registering the two can tell apart, the parser having accepted the comparison as written
+            throw new IllegalArgumentException("Cannot filter on property %s with %s, which carries no argument".formatted(selector(), operator()));
+        }
+        return read(arguments.get(0));
     }
 
     /**

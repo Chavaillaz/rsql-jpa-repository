@@ -598,6 +598,18 @@ class RsqlQueriesTest extends HibernateTest {
     }
 
     @Test
+    @DisplayName("rejects the predicate of a dialect of its own asking for the argument of an operator carrying none")
+    void rejectsTheValueOfAnOperatorWithoutArgument() {
+        ComparisonOperator blank = new ComparisonOperator("=blank=", Arity.nary(0));
+        RsqlDialect dialect = RsqlDialect.DEFAULT.withOperator(blank, comparison -> comparison.criteriaBuilder()
+                .equal(comparison.path(), comparison.value()));
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> countWith(dialect, "name=blank="))
+                .withMessage("Cannot filter on property name with =blank=, which carries no argument");
+    }
+
+    @Test
     @DisplayName("rejects a comparison whose operator the dialect does not hold")
     void rejectsAnUnknownOperator() {
         RsqlDialect dialect = RsqlDialect.DEFAULT.withoutOperator(RSQLOperators.NOT_IN);
