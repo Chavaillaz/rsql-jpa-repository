@@ -610,6 +610,22 @@ class RsqlQueriesTest extends HibernateTest {
     }
 
     @Test
+    @DisplayName("rejects an argument a parser of its own read as another type than its property holds")
+    void rejectsAnArgumentReadAsAnotherType() {
+        RsqlDialect dialect = RsqlDialect.DEFAULT.withArgumentParser((argument, type) -> argument);
+
+        assertThat(countWith(dialect, "name==" + GEISHA)).as("a string still being read as the string it is").isOne();
+        assertThatIllegalArgumentException()
+                .as("where a number read as the text of its argument compares to nothing the column holds")
+                .isThrownBy(() -> countWith(dialect, "strength==5"))
+                .withMessage("Cannot filter on property strength with argument '5', read as String rather than Integer");
+        assertThatIllegalArgumentException()
+                .as("whatever the operator comparing it")
+                .isThrownBy(() -> countWith(dialect, "strength=gt=5"))
+                .withMessage("Cannot filter on property strength with argument '5', read as String rather than Integer");
+    }
+
+    @Test
     @DisplayName("rejects a comparison whose operator the dialect does not hold")
     void rejectsAnUnknownOperator() {
         RsqlDialect dialect = RsqlDialect.DEFAULT.withoutOperator(RSQLOperators.NOT_IN);

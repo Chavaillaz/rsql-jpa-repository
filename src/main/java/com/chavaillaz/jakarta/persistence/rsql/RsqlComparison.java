@@ -305,12 +305,16 @@ public final class RsqlComparison {
      * </ul>
      * The {@code null} literal of the RSQL convention, whatever its case, is read as {@code null} rather than
      * handed over to the parser, so that {@code ==} and {@code !=} compare the property to nothing.
+     * <p>
+     * Whatever the parser gives back is checked to be a value of the very type it was asked to read, which a
+     * parser of its own is free to get wrong: a value of another type would be compared to the property anyway,
+     * silently by an ordering comparison, and bound as a parameter no column holds.
      *
      * @param argument The argument to read
      * @param type     The type to read it as, a primitive being read as its wrapper
      * @return The corresponding value, or {@code null} when the argument is the {@code null} literal
      * @throws IllegalArgumentException if the argument is no valid value of that type, this being a filter an API
-     *                                  consumer sent
+     *                                  consumer sent, or if the parser of the dialect read it as another type
      */
     public @Nullable Object parse(String argument, Class<?> type) {
         Class<?> target = primitiveToWrapper(type);
@@ -323,12 +327,18 @@ public final class RsqlComparison {
         if ("null".equalsIgnoreCase(argument.trim())) {
             return null;
         }
+        Object value;
         try {
-            return dialect.argumentParser().parse(argument, target);
+            value = dialect.argumentParser().parse(argument, target);
         } catch (RuntimeException e) {
             throw new IllegalArgumentException("Cannot filter on property %s with argument '%s', not a valid %s"
                     .formatted(selector(), abbreviate(argument, MAX_QUOTED_LENGTH), target.getSimpleName()), e);
         }
+        if (value != null && !target.isInstance(value)) {
+            throw new IllegalArgumentException("Cannot filter on property %s with argument '%s', read as %s rather than %s"
+                    .formatted(selector(), abbreviate(argument, MAX_QUOTED_LENGTH), value.getClass().getSimpleName(), target.getSimpleName()));
+        }
+        return value;
     }
 
     /**
