@@ -4,6 +4,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   # A superseded run is dropped everywhere but on master, whose every push keeps its own status and badge
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+permissions:
+  contents: read
+  # What the upload of the report to the code scanning of the repository writes
+  security-events: write
 jobs:
   security:
     runs-on: ubuntu-latest
@@ -28,6 +32,8 @@ jobs:
           args: --sarif-file-output=snyk.sarif --include-provided-dependencies=false
 
       - name: Upload result to GitHub Code Scanning
+        # The scan above is allowed to fail, in which case it wrote no report for this step to upload
+        if: hashFiles('snyk.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: snyk.sarif
