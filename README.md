@@ -2,7 +2,7 @@
 
 ![Quality Gate](https://github.com/chavaillaz/rsql-jpa-repository/actions/workflows/code-quality.yml/badge.svg)
 ![Dependency Check](https://github.com/chavaillaz/rsql-jpa-repository/actions/workflows/dependency-check.yml/badge.svg)
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.chavaillaz/rsql-jpa-repository/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.chavaillaz/rsql-jpa-repository)
+[![Maven Central](https://img.shields.io/maven-central/v/com.chavaillaz/rsql-jpa-repository)](https://central.sonatype.com/artifact/com.chavaillaz/rsql-jpa-repository)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 Dynamic [RSQL](https://github.com/jirutka/rsql-parser) filtering extension for
@@ -12,6 +12,17 @@ It lets the API consumers of a repository combine filter conditions dynamically 
 `origin==Ethiopia;strength=gt=5`, on top of the pagination, sorting and type-safe filtering already provided by the
 base library. It is a separate artifact so that a consumer only needing the base library's typed queries does not
 have to pull in the RSQL parser and the translation of its expressions into criteria.
+
+## Requirements
+
+- **Java 21** or later
+- **Jakarta Persistence 3.2**
+- **Hibernate ORM 7.x** as the provider
+
+Hibernate is the only one to bring: it is a provided dependency, as it is for the base library, and it is not
+interchangeable, the translation reading the Hibernate query tree to refuse an argument the attribute converter of
+a property cannot hold. The base library and the [rsql-parser](https://github.com/nstdio/rsql-parser) the
+expressions are parsed with come with the artifact.
 
 ## Installation
 
@@ -27,6 +38,9 @@ The dependency is available in maven central (see badge for version), alongside 
     <artifactId>rsql-jpa-repository</artifactId>
 </dependency>
 ```
+
+The base library comes with this artifact and is only declared to name the version your own code is written
+against; declare no older one, the nearest declaration winning over the one this artifact was built and tested on.
 
 See the base library's [installation instructions](https://github.com/chavaillaz/light-jpa-repository#installation)
 for the Hibernate and static metamodel setup both artifacts rely on.
