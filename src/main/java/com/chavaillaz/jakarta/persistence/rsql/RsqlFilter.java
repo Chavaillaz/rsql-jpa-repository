@@ -211,7 +211,7 @@ public final class RsqlFilter<E> {
      * @param root            The root of the filtered entity to build the predicate on
      * @return The corresponding predicate
      * @throws IllegalArgumentException if an argument of the query is no valid value of the property it is
-     *                                 compared to, or if a comparison is one the persistence provider refuses
+     *                                  compared to, or if a comparison is one the persistence provider refuses
      */
     public Predicate toPredicate(CriteriaBuilder criteriaBuilder, CommonAbstractCriteria query, Root<E> root) {
         return filter.toPredicate(criteriaBuilder, query, root);

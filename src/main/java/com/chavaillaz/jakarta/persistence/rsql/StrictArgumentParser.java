@@ -139,9 +139,8 @@ final class StrictArgumentParser {
     }
 
     /**
-     * Reads a decimal, refusing one no column could hold long before the database is asked to bind it: the JDK
-     * parses the digits of a decimal in quadratic time, and a database or its driver may spell a negative scale
-     * out digit by digit, as H2 does, so that the few bytes of {@code 1e30000000} take it some 37 seconds.
+     * Reads a decimal, refusing one no column could hold long before the database is asked to bind it, see
+     * {@link ArgumentParser#MAX_DECIMAL_SCALE} and {@link ArgumentParser#MAX_DECIMAL_LENGTH}.
      *
      * @param argument The argument to parse
      * @return The corresponding value

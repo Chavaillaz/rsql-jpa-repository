@@ -21,6 +21,12 @@ import com.chavaillaz.jakarta.persistence.repository.Sort;
  * <p>
  * The RSQL selectors and the {@link Sort} criteria share the very same searchable properties of the repository,
  * so that the very same restriction and public naming govern both.
+ * <p>
+ * An expression an API consumer cannot filter with is refused before any statement is issued, as the
+ * {@link IllegalArgumentException} a {@code 400 Bad Request} is answered to: one naming a property that is not
+ * searchable or that the entities cannot be filtered on, comparing one to an argument no query should run with, or
+ * nesting its parentheses deeper than {@link com.chavaillaz.jakarta.persistence.rsql.RsqlDialect#MAX_NESTING_DEPTH}
+ * levels. A malformed expression raises the {@link RSQLParserException} of the parser instead.
  *
  * @param <E> The type of the managed entity
  * @param <I> The type of the entity identifier
@@ -34,10 +40,7 @@ public interface RsqlRepository<E extends Identifiable<I>, I> extends Repository
      * @param rsql The RSQL filter expression, {@code null} or blank to count all the entities
      * @return The number of matching entities
      * @throws RSQLParserException      if the expression is not valid RSQL
-     * @throws IllegalArgumentException if the expression refers to a property that is not searchable, compares a
-     *                                  property to an argument its type cannot be parsed from or to a pattern
-     *                                  holding too many wildcards or it cannot be matched against, or nests its
-     *                                  parentheses too deeply
+     * @throws IllegalArgumentException if the expression is one the entities cannot be filtered with
      */
     long count(@Nullable String rsql);
 
@@ -103,10 +106,8 @@ public interface RsqlRepository<E extends Identifiable<I>, I> extends Repository
      * @param pageable The requested page and ordering, {@link Pageable#UNPAGED} to disable the pagination
      * @return The corresponding page, never {@code null}
      * @throws RSQLParserException      if the expression is not valid RSQL
-     * @throws IllegalArgumentException if the expression refers to a property that is not searchable, compares a
-     *                                  property to an argument its type cannot be parsed from or to a pattern
-     *                                  holding too many wildcards or it cannot be matched against, nests its
-     *                                  parentheses too deeply, or if the requested ordering is not usable
+     * @throws IllegalArgumentException if the expression is one the entities cannot be filtered with, or if the
+     *                                  requested ordering is not usable
      */
     PaginationResult<E> search(@Nullable String rsql, Pageable pageable);
 
@@ -118,11 +119,9 @@ public interface RsqlRepository<E extends Identifiable<I>, I> extends Repository
      * @param cursor The requested position, size and ordering
      * @return The corresponding page with the tokens of the surrounding ones
      * @throws RSQLParserException      if the expression is not valid RSQL
-     * @throws IllegalArgumentException if the expression refers to a property that is not searchable, compares a
-     *                                  property to an argument its type cannot be parsed from or to a pattern
-     *                                  holding too many wildcards or it cannot be matched against, nests its
-     *                                  parentheses too deeply, if the ordering is not usable as a cursor key, or if
-     *                                  the cursor is malformed or was issued for another ordering
+     * @throws IllegalArgumentException if the expression is one the entities cannot be filtered with, if the
+     *                                  ordering is not usable as a cursor key, or if the cursor is malformed or
+     *                                  was issued for another ordering
      */
     CursorResult<E> search(@Nullable String rsql, Cursor cursor);
 

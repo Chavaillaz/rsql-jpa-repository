@@ -29,8 +29,8 @@ public interface ComparisonPredicate {
      * @param comparison The comparison to build the predicate of
      * @return The corresponding predicate
      * @throws IllegalArgumentException if the comparison cannot be built, its arguments or the type of its
-     *                                 property not being ones the operator compares, this being a filter an API
-     *                                 consumer sent, see {@link RsqlComparison#unsupported()}
+     *                                  property not being ones the operator compares, this being a filter an API
+     *                                  consumer sent, see {@link RsqlComparison#unsupported()}
      */
     Predicate toPredicate(RsqlComparison comparison);
 

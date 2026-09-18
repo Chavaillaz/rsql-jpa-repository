@@ -47,8 +47,7 @@ public interface ArgumentParser {
      *
      * @param argument The argument to parse, never the {@code null} literal
      * @param type     The Java type of the compared property, a wrapper rather than a primitive
-     * @return The corresponding value, of that very type, the caller refusing a value of another one rather than
-     *         comparing the property to it
+     * @return The corresponding value, of that very type, one of another being refused by the caller
      * @throws RuntimeException if the argument is not a valid value of that type, or if no argument is read as
      *                          that type, which the caller reports as the illegal argument an API consumer sent
      */

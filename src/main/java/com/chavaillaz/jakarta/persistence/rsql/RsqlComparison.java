@@ -29,7 +29,7 @@ import org.jspecify.annotations.Nullable;
  * such as the size of a collection or an argument of its own type, is free to do so; the arguments of a
  * comparison a query applies more than once are read once per application.
  * <p>
- * This is handed over, never implemented: a comparison is created by the translation for each application of the
+ * This is handed over, never built: a comparison is created by the translation for each application of the
  * criteria, and belongs to that application alone.
  *
  * @see RsqlDialect#withOperator(ComparisonOperator, ComparisonPredicate)
@@ -343,14 +343,9 @@ public final class RsqlComparison {
 
     /**
      * Turns an argument into the pattern of a {@code like}, where the {@code *} of the RSQL convention stands for
-     * any characters as the {@code %} of SQL does, refusing a pattern too costly to match.
-     * <p>
-     * A database may evaluate a {@code like} by trying every position of the value each wildcard may stand for,
-     * backtracking whenever the rest of the pattern fails, so that each wildcard followed by more of the pattern
-     * multiplies the work by up to the length of the value: the few bytes of {@code *e*e*e*e*x} take H2 some 24
-     * seconds to match against a single string of 255 e, and a consumer is free to send them as often as it cares
-     * to. Those ending a pattern match the rest of a value at once, whatever its length, and are not counted, see
-     * {@link #MAX_WILDCARDS}.
+     * any characters as the {@code %} of SQL does, refusing a pattern holding more wildcards than
+     * {@link #MAX_WILDCARDS}, which a database may take seconds to match. Those ending a pattern match the rest of
+     * a value at once, whatever its length, and are not counted.
      *
      * @param argument The argument to turn into a pattern
      * @return The corresponding pattern
