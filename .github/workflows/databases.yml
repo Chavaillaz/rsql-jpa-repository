@@ -5,33 +5,15 @@ on:
       - master
   pull_request:
     types: [ opened, synchronize, reopened ]
-  schedule:
-    - cron: '0 2 * * *'
   workflow_dispatch:
 jobs:
-  postgresql:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'maven'
-
-      - name: Test on PostgreSQL
-        run: mvn -B verify -Ddatabase=postgresql
-
-  nightly:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+  test:
+    name: ${{ matrix.database }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        database: [ sqlserver, oracle ]
+        database: [ postgresql, sqlserver, oracle ]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
