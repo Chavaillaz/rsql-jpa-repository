@@ -6,6 +6,10 @@ on:
   pull_request:
     types: [ opened, synchronize, reopened ]
   workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # A superseded run is dropped everywhere but on master, whose every push keeps its own status and badge
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 jobs:
   test:
     name: ${{ matrix.database }}

@@ -1,5 +1,9 @@
 name: Dependency check
 on: push
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # A superseded run is dropped everywhere but on master, whose every push keeps its own status and badge
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 jobs:
   security:
     runs-on: ubuntu-latest
