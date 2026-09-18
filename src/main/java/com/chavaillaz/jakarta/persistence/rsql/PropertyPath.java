@@ -63,12 +63,19 @@ final class PropertyPath {
      * @param metamodel  The metamodel the attributes are looked up in
      * @param entityType The type of the managed entity, which the path starts from
      * @param selector   The selector as the API consumer sent it, which the error messages name
-     * @param property   The entity attribute path the selector resolves to, dot separated
+     * @param property   The entity attribute path the selector resolves to, dot separated, or {@code null} when
+     *                   the resolution returned nothing for it
      * @return The corresponding resolved path
-     * @throws IllegalArgumentException if the path names an attribute the entity does not have, or reaches through
-     *                                  an attribute that has none, such as a basic one
+     * @throws IllegalArgumentException if the resolution named no path, or if the path names an attribute the
+     *                                  entity does not have, or reaches through an attribute that has none, such
+     *                                  as a basic one
      */
-    static PropertyPath resolve(Metamodel metamodel, Class<?> entityType, String selector, String property) {
+    static PropertyPath resolve(Metamodel metamodel, Class<?> entityType, String selector, @Nullable String property) {
+        if (property == null) {
+            // The resolution returned nothing rather than raising, as the lookup of a map of properties does
+            throw unknown(selector);
+        }
+
         String[] names = NESTING_PATTERN.split(property);
         if (names.length == 0) {
             // The selector was made of nothing but separators, such as a single dot

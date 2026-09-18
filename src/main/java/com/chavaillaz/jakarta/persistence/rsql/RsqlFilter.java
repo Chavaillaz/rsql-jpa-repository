@@ -84,7 +84,8 @@ public final class RsqlFilter<E> {
      * @param metamodel  The metamodel the attributes of the selectors are resolved against
      * @param dialect    The dialect the operators of the query are translated with
      * @param selectors  The resolution of a selector into the entity attribute path it names, dot separated,
-     *                   raising an {@link IllegalArgumentException} for a selector no property exposes, or
+     *                   raising an {@link IllegalArgumentException} or returning {@code null}, as the lookup of a
+     *                   map of properties does, for a selector no property exposes, or
      *                   {@link UnaryOperator#identity()} to take the selectors as they are sent
      * @return The corresponding filter
      * @throws IllegalArgumentException if the query uses an operator the dialect does not hold, or names a

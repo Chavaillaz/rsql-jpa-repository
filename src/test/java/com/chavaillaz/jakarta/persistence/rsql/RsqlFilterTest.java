@@ -104,6 +104,10 @@ class RsqlFilterTest extends HibernateTest {
                 .as("a selector no property exposes is refused by the resolution itself")
                 .isThrownBy(() -> names("origin==" + ETHIOPIA, selectors))
                 .withMessage("Cannot filter on unknown property origin");
+        assertThatIllegalArgumentException()
+                .as("a resolution returning nothing rather than raising, as a map lookup does")
+                .isThrownBy(() -> names("origin==" + ETHIOPIA, properties::get))
+                .withMessage("Cannot filter on unknown property origin");
     }
 
     @Test
