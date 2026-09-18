@@ -19,11 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'maven'
+        uses: ./.github/actions/setup
 
       - name: Test on ${{ matrix.database }}
         run: mvn -B verify -Ddatabase=${{ matrix.database }}
