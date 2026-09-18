@@ -1,7 +1,7 @@
 # RSQL JPA Repository
 
-![Quality Gate](https://github.com/chavaillaz/rsql-jpa-repository/actions/workflows/sonarcloud.yml/badge.svg)
-![Dependency Check](https://github.com/chavaillaz/rsql-jpa-repository/actions/workflows/snyk.yml/badge.svg)
+![Quality Gate](https://github.com/chavaillaz/rsql-jpa-repository/actions/workflows/code-quality.yml/badge.svg)
+![Dependency Check](https://github.com/chavaillaz/rsql-jpa-repository/actions/workflows/dependency-check.yml/badge.svg)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.chavaillaz/rsql-jpa-repository/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.chavaillaz/rsql-jpa-repository)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
