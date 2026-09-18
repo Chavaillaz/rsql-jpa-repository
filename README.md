@@ -2,7 +2,7 @@
 
 ![Quality Gate](https://github.com/chavaillaz/rsql-jpa-repository/actions/workflows/code-quality.yml/badge.svg)
 ![Dependency Check](https://github.com/chavaillaz/rsql-jpa-repository/actions/workflows/dependency-check.yml/badge.svg)
-[![Maven Central](https://img.shields.io/maven-central/v/com.chavaillaz/rsql-jpa-repository)](https://central.sonatype.com/artifact/com.chavaillaz/rsql-jpa-repository)
+[![Maven Central](https://img.shields.io/maven-central/v/com.chavaillaz/rsql-jpa-repository?label=Maven%20Central)](https://central.sonatype.com/artifact/com.chavaillaz/rsql-jpa-repository)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 Dynamic [RSQL](https://github.com/jirutka/rsql-parser) filtering extension for
@@ -26,21 +26,14 @@ expressions are parsed with come with the artifact.
 
 ## Installation
 
-The dependency is available in maven central (see badge for version), alongside the base library:
+The dependency is available in maven central (see badge for version):
 
 ```xml
-<dependency>
-    <groupId>com.chavaillaz</groupId>
-    <artifactId>light-jpa-repository</artifactId>
-</dependency>
 <dependency>
     <groupId>com.chavaillaz</groupId>
     <artifactId>rsql-jpa-repository</artifactId>
 </dependency>
 ```
-
-The base library comes with this artifact and is only declared to name the version your own code is written
-against; declare no older one, the nearest declaration winning over the one this artifact was built and tested on.
 
 See the base library's [installation instructions](https://github.com/chavaillaz/light-jpa-repository#installation)
 for the Hibernate and static metamodel setup both artifacts rely on.
