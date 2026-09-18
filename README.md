@@ -103,10 +103,10 @@ instead, as `roaster.coffees.name==Geisha` does.
 ### Operators
 
 - **`==` and `!=`** compare a string to its argument as a pattern, ignoring the case, where `*` stands for any
-  characters as the `%` and `_` of SQL do, such as `name==*geisha*`. The pattern is lowered in the root locale
-  rather than in the default one, so that the same filter means the same wherever the application runs. Anything
-  else is compared to the very value its argument spells, `==null` matching the entities having no such value and
-  `!=null` those having one.
+  characters as the `%` of SQL does, such as `name==*geisha*`, and the `_` of SQL for a single one, such as
+  `name==Ge_sha`. The pattern is lowered in the root locale rather than in the default one, so that the same filter
+  means the same wherever the application runs. Anything else is compared to the very value its argument spells,
+  `==null` matching the entities having no such value and `!=null` those having one.
 - **`=gt=`, `=ge=`, `=lt=` and `=le=`**, also written `>`, `>=`, `<` and `<=`, compare a property to the very value
   its argument spells, dates and times included: `packedAt=gt=2024-01-01T10:00:00` matches what was packed strictly
   after that instant.
@@ -176,10 +176,10 @@ wrong result.
   ending it, such as `name==*e*e*e*e*x`, which can take H2 seconds to match against a single value, and **any
   pattern matched against a string not held as text**, such as a `@Lob` one, which Hibernate would otherwise refuse
   to lower for the comparison.
-- **A decimal or integer argument whose scale lies beyond `ArgumentParser.MAX_DECIMAL_SCALE`**, negative or positive,
-  such as `price=lt=1e30000000`, which takes a few bytes to send but seconds for the database to bind, **or written
-  with more than `ArgumentParser.MAX_DECIMAL_LENGTH` characters**, whose digits take the JDK seconds to parse by the
-  hundred thousand.
+- **A decimal argument whose scale lies beyond `ArgumentParser.MAX_DECIMAL_SCALE`**, negative or positive, such as
+  `price=lt=1e30000000`, which takes a few bytes to send but seconds for the database to bind, and **a decimal or
+  integer argument written with more than `ArgumentParser.MAX_DECIMAL_LENGTH` characters**, whose digits take the
+  JDK seconds to parse by the hundred thousand.
 - **An argument holding a NUL character**, which PostgreSQL would otherwise refuse once executing the statement.
 
 ## Combining with typed queries
@@ -228,7 +228,8 @@ hold, and `unsupported()` refuses a comparison as the bad request it is.
 The parser of the dialect accepts exactly its operators, so that one it does not know is refused while the query is
 parsed. Registering an argument type leaves the reading of every other one untouched, along with the checks applying
 to any argument; replacing the parser as a whole, with `withArgumentParser`, gives up the refusals documented above,
-which a parser of your own would have to apply as well.
+which a parser of your own would have to apply as well. Whatever a parser gives back is checked to be a value of the
+very type it was asked to read, rather than compared to the property as it comes.
 
 ## Filtering without a repository
 
@@ -247,8 +248,10 @@ Root<CoffeeEntity> root = query.from(CoffeeEntity.class);
 query.where(filter.toPredicate(criteriaBuilder, query, root));
 ```
 
-Pass a dialect and the resolution of the selectors into entity attribute paths to the four argument overload, which
-is what `AbstractRsqlRepository` does with the searchable properties of a repository.
+Pass a dialect and the resolution of the selectors into entity attribute paths to the five argument overload, which
+is what `AbstractRsqlRepository` does with the searchable properties of a repository. A resolution refuses a
+selector no property exposes by raising an `IllegalArgumentException` or by returning `null`, as the lookup of a map
+of properties does.
 
 ## Contributing
 
