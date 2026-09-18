@@ -321,6 +321,18 @@ class CoffeeRsqlSearchTest extends HibernateTest {
     }
 
     @Test
+    @DisplayName("counts the nesting of a query from its opening parentheses alone, whatever closes before them")
+    void countsTheNestingFromTheOpeningParentheses() {
+        int limit = RsqlDialect.MAX_NESTING_DEPTH;
+        String origin = "origin==" + ETHIOPIA;
+
+        assertThatIllegalArgumentException()
+                .as("a parenthesis closing nothing buys no opening one back")
+                .isThrownBy(() -> countAll(")".repeat(limit) + "(".repeat(limit + 1) + origin + ")".repeat(limit + 1)))
+                .withMessage("Cannot filter with an RSQL query nesting its parentheses deeper than %d levels", limit);
+    }
+
+    @Test
     @DisplayName("counts no parenthesis of a quoted argument towards the nesting of a query")
     void ignoresTheParenthesesOfAQuotedArgument() {
         String parentheses = "(".repeat(RsqlDialect.MAX_NESTING_DEPTH + 1);

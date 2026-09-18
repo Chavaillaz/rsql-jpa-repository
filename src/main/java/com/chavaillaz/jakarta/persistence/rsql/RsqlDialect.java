@@ -215,6 +215,10 @@ public final class RsqlDialect {
     /**
      * Checks how deep the parentheses of an RSQL query are nested, counting them as the parser tokenizes them: a
      * parenthesis within a quoted argument, where a backslash escapes the next character, nests nothing.
+     * <p>
+     * A parenthesis closing one that was never opened is counted as the nothing it closes, rather than as a level
+     * to open again, so that what is checked is what the query nests and never what the parser happens to refuse
+     * first.
      *
      * @param rsql The RSQL query to check
      * @throws IllegalArgumentException if the query nests its parentheses deeper than {@value #MAX_NESTING_DEPTH}
@@ -240,7 +244,7 @@ public final class RsqlDialect {
                 if (depth > MAX_NESTING_DEPTH) {
                     throw new IllegalArgumentException("Cannot filter with an RSQL query nesting its parentheses deeper than %d levels".formatted(MAX_NESTING_DEPTH));
                 }
-            } else if (character == ')') {
+            } else if (character == ')' && depth > 0) {
                 depth--;
             }
         }
