@@ -19,25 +19,26 @@ jobs:
     # the upload needs, so that it is skipped rather than reported as a check that found nothing
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    # Read here rather than in the steps needing it, a secret not being readable from the condition skipping them
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Run Snyk to monitor for vulnerabilities
         # The snapshot Snyk watches is the state of the project, which a pull request is not yet
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && env.SNYK_TOKEN != ''
         uses: snyk/actions/maven@master
         continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: monitor
 
       - name: Run Snyk to check for vulnerabilities
+        # A Dependabot build reads the Dependabot secrets, where the token is only found once it is copied there
+        if: env.SNYK_TOKEN != ''
         uses: snyk/actions/maven@master
         continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           args: --sarif-file-output=snyk.sarif --include-provided-dependencies=false
 
