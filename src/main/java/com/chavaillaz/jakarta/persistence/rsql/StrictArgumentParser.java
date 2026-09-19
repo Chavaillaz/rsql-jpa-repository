@@ -38,8 +38,9 @@ import java.util.function.Function;
  * covers the value types of an application.
  * <p>
  * A value is read as it is written or not at all: a date time missing its seconds, an impossible day, a year of
- * more than four digits, a boolean spelled {@code yes} or a decimal no column could hold are refused rather than
- * silently compared to something else, or to something the database takes seconds to bind.
+ * more than four digits, a boolean spelled {@code yes}, a decimal no column could hold or a floating point number
+ * overflowing into an infinity are refused rather than silently compared to something else, or to something the
+ * database takes seconds to bind.
  *
  * @see RsqlDialect#DEFAULT
  */
@@ -70,8 +71,8 @@ final class StrictArgumentParser {
             entry(Short.class, Short::valueOf),
             entry(Integer.class, Integer::valueOf),
             entry(Long.class, Long::valueOf),
-            entry(Float.class, Float::valueOf),
-            entry(Double.class, Double::valueOf),
+            entry(Float.class, argument -> requireFinite(Float.valueOf(argument), argument)),
+            entry(Double.class, argument -> requireFinite(Double.valueOf(argument), argument)),
             entry(BigInteger.class, argument -> new BigInteger(requireDigits(argument))),
             entry(BigDecimal.class, StrictArgumentParser::parseDecimal),
             entry(UUID.class, StrictArgumentParser::parseUuid),
@@ -153,6 +154,27 @@ final class StrictArgumentParser {
             throw new IllegalArgumentException("Expected a scale within %d, got %d".formatted(MAX_DECIMAL_SCALE, decimal.scale()));
         }
         return decimal;
+    }
+
+    /**
+     * Checks that a floating point number is a finite one, where {@link Double#valueOf(String)} reads the
+     * {@code NaN} and {@code Infinity} literals as the values they spell and quietly overflows an argument beyond
+     * the largest value its type holds into an infinity, {@code 1e400} being one as a double and {@code 1e100}
+     * already as a float: {@code price=gt=1e400} would otherwise compare the property to an infinity, matching
+     * nothing wherever the database holds one at all, and failing the statement while binding it where none does,
+     * as a number column of Oracle holds neither.
+     *
+     * @param <N>      The type of the number
+     * @param number   The number read from the argument
+     * @param argument The argument it was read from, which the message names
+     * @return The very same number
+     * @throws IllegalArgumentException if it is an infinity or not a number
+     */
+    private static <N extends Number> N requireFinite(N number, String argument) {
+        if (!Double.isFinite(number.doubleValue())) {
+            throw new IllegalArgumentException("Expected a finite number, got " + argument);
+        }
+        return number;
     }
 
     /**

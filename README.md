@@ -187,6 +187,9 @@ wrong result.
   `price=lt=1e30000000`, which takes a few bytes to send but seconds for the database to bind, and **a decimal or
   integer argument written with more than `ArgumentParser.MAX_DECIMAL_LENGTH` characters**, whose digits take the
   JDK seconds to parse by the hundred thousand.
+- **A `float` or `double` argument that is no finite number**, whether it spells `NaN` or `Infinity` or overflows
+  into one, such as `price=gt=1e400`, which would otherwise be compared as the infinity it was silently read as,
+  matching nothing wherever the database holds one at all and failing the statement where none does.
 - **An argument holding a NUL character**, which PostgreSQL would otherwise refuse once executing the statement.
 
 ## Combining with typed queries

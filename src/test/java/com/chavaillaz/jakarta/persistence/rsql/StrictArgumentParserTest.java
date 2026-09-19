@@ -99,6 +99,23 @@ class StrictArgumentParserTest {
         assertThatIllegalArgumentException().isThrownBy(() -> parse(digits + "9", BigInteger.class));
     }
 
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"1e400", "-1e400", "NaN", "Infinity", "-Infinity"})
+    @DisplayName("rejects a double that is no finite number, rather than silently comparing an infinity")
+    void rejectsADoubleThatIsNotFinite(String argument) {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> parse(argument, Double.class))
+                .withMessage("Expected a finite number, got " + argument);
+    }
+
+    @Test
+    @DisplayName("rejects a float overflowing into an infinity, which it does far sooner than a double")
+    void rejectsAFloatThatIsNotFinite() {
+        assertThat(parse("1e38", Float.class)).isEqualTo(1e38f);
+        assertThat(parse("1e100", Double.class)).isEqualTo(1e100);
+        assertThatIllegalArgumentException().isThrownBy(() -> parse("1e100", Float.class));
+    }
+
     @ParameterizedTest(name = "1e{0}" + (MAX_DECIMAL_SCALE + 1))
     @ValueSource(strings = {"", "-"})
     @DisplayName("rejects a decimal whose scale lies beyond the limit, negative or positive")
