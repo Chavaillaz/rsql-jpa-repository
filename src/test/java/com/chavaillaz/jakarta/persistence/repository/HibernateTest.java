@@ -52,6 +52,10 @@ public abstract class HibernateTest {
     /**
      * Setups the session factory for the given entity types, closing the previous one if any, so that a suite
      * mixing several sets of entities cannot leak a factory.
+     * <p>
+     * The registry is destroyed by hand when the factory never comes to hold it, a mapping the metamodel refuses
+     * otherwise leaving its connection pool open for the rest of the run, against the container of the database
+     * the suite was told to run on.
      *
      * @param types The entity types to map
      */
@@ -63,17 +67,22 @@ public abstract class HibernateTest {
                 .applySettings(TestDatabase.settings())
                 .build();
 
-        MetadataSources sources = new MetadataSources(registry);
-        Stream.of(types).forEach(sources::addAnnotatedClass);
+        try {
+            MetadataSources sources = new MetadataSources(registry);
+            Stream.of(types).forEach(sources::addAnnotatedClass);
 
-        Metadata metadata = sources.getMetadataBuilder().build();
-        sessionFactory = metadata.getSessionFactoryBuilder()
-                .applyStatementInspector(sql -> {
-                    statements.add(sql);
-                    return sql;
-                })
-                .applyAutoFlushing(true)
-                .build();
+            Metadata metadata = sources.getMetadataBuilder().build();
+            sessionFactory = metadata.getSessionFactoryBuilder()
+                    .applyStatementInspector(sql -> {
+                        statements.add(sql);
+                        return sql;
+                    })
+                    .applyAutoFlushing(true)
+                    .build();
+        } catch (RuntimeException e) {
+            StandardServiceRegistryBuilder.destroy(registry);
+            throw e;
+        }
 
         log.debug("Session factory started for {}", Stream.of(types).map(Class::getSimpleName).toList());
     }
