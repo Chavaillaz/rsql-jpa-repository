@@ -583,6 +583,10 @@ class RsqlQueriesTest extends HibernateTest {
                 .as("the wildcards of a pattern stay limited")
                 .isThrownBy(() -> countWith(dialect, "name=like=*a*b*c*d*e"))
                 .withMessage("Cannot filter on property name with a pattern of more than %d wildcards", RsqlComparison.MAX_WILDCARDS);
+        assertThatIllegalArgumentException()
+                .as("and so does the NUL character PostgreSQL refuses, a raw argument having gone through no parse")
+                .isThrownBy(() -> countWith(dialect, "name=like=G" + Character.MIN_VALUE + "*"))
+                .withMessage("Cannot filter on property name with an argument holding a NUL character");
     }
 
     @Test

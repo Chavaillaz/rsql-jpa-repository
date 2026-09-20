@@ -323,9 +323,7 @@ public final class RsqlComparison {
         if (Collection.class.isAssignableFrom(target) || Map.class.isAssignableFrom(target)) {
             throw new IllegalArgumentException("Cannot filter on collection property " + selector());
         }
-        if (argument.indexOf(Character.MIN_VALUE) >= 0) {
-            throw new IllegalArgumentException("Cannot filter on property %s with an argument holding a NUL character".formatted(selector()));
-        }
+        requireNoNul(argument);
         if ("null".equalsIgnoreCase(argument.trim())) {
             return null;
         }
@@ -351,16 +349,34 @@ public final class RsqlComparison {
     }
 
     /**
+     * Refuses an argument holding a NUL character, which PostgreSQL refuses in any text, failing the statement
+     * with the very exception an API layer answers with a 500.
+     *
+     * @param argument The argument to check
+     * @throws IllegalArgumentException if it holds a NUL character
+     */
+    private void requireNoNul(String argument) {
+        if (argument.indexOf(Character.MIN_VALUE) >= 0) {
+            throw new IllegalArgumentException("Cannot filter on property %s with an argument holding a NUL character".formatted(selector()));
+        }
+    }
+
+    /**
      * Turns an argument into the pattern of a {@code like}, where the {@code *} of the RSQL convention stands for
      * any characters as the {@code %} of SQL does, refusing a pattern holding more wildcards than
      * {@link #MAX_WILDCARDS}, which a database may take seconds to match. Those ending a pattern match the rest of
      * a value at once, whatever its length, and are not counted.
+     * <p>
+     * A pattern holding a NUL character is refused as well: the predicate of an operator of its own builds its
+     * {@code like} from a raw argument, which no {@link #parse(String, Class)} has read.
      *
      * @param argument The argument to turn into a pattern
      * @return The corresponding pattern
-     * @throws IllegalArgumentException if the argument holds more wildcards than {@link #MAX_WILDCARDS}
+     * @throws IllegalArgumentException if the argument holds more wildcards than {@link #MAX_WILDCARDS}, or holds
+     *                                  a NUL character
      */
     public String pattern(String argument) {
+        requireNoNul(argument);
         long wildcards = stripEnd(argument, WILDCARDS).chars()
                 .filter(character -> WILDCARDS.indexOf(character) >= 0)
                 .count();
