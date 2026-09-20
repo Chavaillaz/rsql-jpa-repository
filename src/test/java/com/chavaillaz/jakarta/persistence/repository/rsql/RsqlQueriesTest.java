@@ -626,6 +626,27 @@ class RsqlQueriesTest extends HibernateTest {
     }
 
     @Test
+    @DisplayName("rejects an argument a parser of its own read as no value at all, rather than comparing the property to nothing")
+    void rejectsAnArgumentReadAsNoValue() {
+        RsqlDialect dialect = RsqlDialect.DEFAULT.withArgumentType(Integer.class, argument -> null);
+
+        assertThat(countWith(dialect, "name==" + GEISHA)).as("another type still being read by the default parser").isOne();
+        assertThatIllegalArgumentException()
+                .as("where == would compare the property to nothing, matching none of the coffees")
+                .isThrownBy(() -> countWith(dialect, "strength==5"))
+                .withMessage("Cannot filter on property strength with argument '5', read as no value at all");
+        assertThatIllegalArgumentException()
+                .as("and != would match every coffee having a strength, those of strength 5 included")
+                .isThrownBy(() -> countWith(dialect, "strength!=5"))
+                .withMessage("Cannot filter on property strength with argument '5', read as no value at all");
+        assertThatIllegalArgumentException()
+                .as("whatever the operator comparing it")
+                .isThrownBy(() -> countWith(dialect, "strength=in=(5)"))
+                .withMessage("Cannot filter on property strength with argument '5', read as no value at all");
+        assertThat(count("strength==null")).as("where the null literal is still read as nothing").isZero();
+    }
+
+    @Test
     @DisplayName("rejects a comparison whose operator the dialect does not hold")
     void rejectsAnUnknownOperator() {
         RsqlDialect dialect = RsqlDialect.DEFAULT.withoutOperator(RSQLOperators.NOT_IN);

@@ -132,8 +132,8 @@ public final class RsqlDialect {
      *
      * @param <T>    The type to read
      * @param type   The type to read, as the metamodel reports it for the compared property
-     * @param parser The parser reading an argument as that type, raising a {@link RuntimeException} for an
-     *               argument that is no valid value of it
+     * @param parser The parser reading an argument as that type, raising a {@link RuntimeException} rather than
+     *               giving {@code null} back for an argument that is no valid value of it
      * @return The corresponding dialect
      */
     public <T> RsqlDialect withArgumentType(Class<T> type, Function<String, ? extends T> parser) {

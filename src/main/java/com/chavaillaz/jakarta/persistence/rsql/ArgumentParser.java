@@ -1,7 +1,5 @@
 package com.chavaillaz.jakarta.persistence.rsql;
 
-import org.jspecify.annotations.Nullable;
-
 /**
  * Reads the argument of an RSQL comparison into the Java type of the property it is compared to, such as the
  * {@code 5} of {@code strength=gt=5} into an {@link Integer}.
@@ -47,10 +45,11 @@ public interface ArgumentParser {
      *
      * @param argument The argument to parse, never the {@code null} literal
      * @param type     The Java type of the compared property, a wrapper rather than a primitive
-     * @return The corresponding value, of that very type, one of another being refused by the caller
+     * @return The corresponding value, of that very type, never {@code null}: a value of another type and an
+     *         argument read as nothing at all are refused by the caller alike
      * @throws RuntimeException if the argument is not a valid value of that type, or if no argument is read as
      *                          that type, which the caller reports as the illegal argument an API consumer sent
      */
-    @Nullable Object parse(String argument, Class<?> type);
+    Object parse(String argument, Class<?> type);
 
 }

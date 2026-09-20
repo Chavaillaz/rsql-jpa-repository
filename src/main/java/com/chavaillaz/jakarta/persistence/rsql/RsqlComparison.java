@@ -306,15 +306,17 @@ public final class RsqlComparison {
      * The {@code null} literal of the RSQL convention, whatever its case, is read as {@code null} rather than
      * handed over to the parser, so that {@code ==} and {@code !=} compare the property to nothing.
      * <p>
-     * Whatever the parser gives back is checked to be a value of the very type it was asked to read, which a
-     * parser of its own is free to get wrong: a value of another type would be compared to the property anyway,
-     * silently by an ordering comparison, and bound as a parameter no column holds.
+     * Whatever the parser gives back is checked to be a value of the very type it was asked to read, and to be a
+     * value at all, which a parser of its own is free to get wrong: a value of another type would be compared to
+     * the property anyway, silently by an ordering comparison, and bound as a parameter no column holds, where
+     * nothing at all would compare the property to {@code null} as the {@code null} literal does.
      *
      * @param argument The argument to read
      * @param type     The type to read it as, a primitive being read as its wrapper
      * @return The corresponding value, or {@code null} when the argument is the {@code null} literal
      * @throws IllegalArgumentException if the argument is no valid value of that type, this being a filter an API
-     *                                  consumer sent, or if the parser of the dialect read it as another type
+     *                                  consumer sent, or if the parser of the dialect read it as another type or
+     *                                  as no value at all
      */
     public @Nullable Object parse(String argument, Class<?> type) {
         Class<?> target = primitiveToWrapper(type);
@@ -334,7 +336,14 @@ public final class RsqlComparison {
             throw new IllegalArgumentException("Cannot filter on property %s with argument '%s', not a valid %s"
                     .formatted(selector(), abbreviate(argument, MAX_QUOTED_LENGTH), target.getSimpleName()), e);
         }
-        if (value != null && !target.isInstance(value)) {
+        if (value == null) {
+            // Only a parser of its own gives nothing back, the null literal having been read above: the argument
+            // would otherwise mean the very literal it is not, so that name!=Geisha would match every named
+            // coffee, Geisha included, rather than telling the consumer their argument was read as no value
+            throw new IllegalArgumentException("Cannot filter on property %s with argument '%s', read as no value at all"
+                    .formatted(selector(), abbreviate(argument, MAX_QUOTED_LENGTH)));
+        }
+        if (!target.isInstance(value)) {
             throw new IllegalArgumentException("Cannot filter on property %s with argument '%s', read as %s rather than %s"
                     .formatted(selector(), abbreviate(argument, MAX_QUOTED_LENGTH), value.getClass().getSimpleName(), target.getSimpleName()));
         }
