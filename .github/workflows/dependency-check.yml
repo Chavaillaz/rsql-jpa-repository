@@ -29,7 +29,7 @@ jobs:
       - name: Run Snyk to monitor for vulnerabilities
         # The snapshot Snyk watches is the state of the project, which a pull request is not yet
         if: github.event_name == 'push' && env.SNYK_TOKEN != ''
-        uses: snyk/actions/maven@master
+        uses: snyk/actions/maven@v1
         continue-on-error: true
         with:
           command: monitor
@@ -37,7 +37,7 @@ jobs:
       - name: Run Snyk to check for vulnerabilities
         # A Dependabot build reads the Dependabot secrets, where the token is only found once it is copied there
         if: env.SNYK_TOKEN != ''
-        uses: snyk/actions/maven@master
+        uses: snyk/actions/maven@v1
         continue-on-error: true
         with:
           args: --sarif-file-output=snyk.sarif --include-provided-dependencies=false
