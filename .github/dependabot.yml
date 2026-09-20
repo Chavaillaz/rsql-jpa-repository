@@ -4,8 +4,7 @@ updates:
   - package-ecosystem: maven
     directory: "/"
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     # Only the majors wait here, the grouped one being merged as soon as its build passes
     open-pull-requests-limit: 10
     groups:
@@ -19,8 +18,7 @@ updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     groups:
       # A single group, every update being a major one, so that the workflows move together as they did by hand
       actions:
