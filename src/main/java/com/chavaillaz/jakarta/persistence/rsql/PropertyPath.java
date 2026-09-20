@@ -1,5 +1,8 @@
 package com.chavaillaz.jakarta.persistence.rsql;
 
+import static com.chavaillaz.jakarta.persistence.rsql.RsqlComparison.MAX_QUOTED_LENGTH;
+import static org.apache.commons.lang3.StringUtils.abbreviate;
+
 import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.metamodel.Attribute;
@@ -170,8 +173,17 @@ final class PropertyPath {
         return unknown(selector, null);
     }
 
+    /**
+     * Builds the exception refusing a selector, quoting it abbreviated as the arguments are, a selector being
+     * consumer sent and unbounded as long as no resolution restricts it, see
+     * {@link RsqlComparison#MAX_QUOTED_LENGTH}.
+     *
+     * @param selector The selector the message names
+     * @param cause    The exception the metamodel raised for it, or {@code null}
+     * @return The exception to throw
+     */
     private static IllegalArgumentException unknown(String selector, @Nullable Throwable cause) {
-        return new IllegalArgumentException("Cannot filter on unknown property " + selector, cause);
+        return new IllegalArgumentException("Cannot filter on unknown property " + abbreviate(selector, MAX_QUOTED_LENGTH), cause);
     }
 
     /**

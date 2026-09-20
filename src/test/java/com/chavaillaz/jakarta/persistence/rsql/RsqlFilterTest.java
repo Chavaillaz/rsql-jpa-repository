@@ -111,6 +111,20 @@ class RsqlFilterTest extends HibernateTest {
     }
 
     @Test
+    @DisplayName("quotes an unknown selector abbreviated, a whole one flooding the logs of the application")
+    void abbreviatesAnUnknownSelector() {
+        String selector = "caffeine".repeat(25_000);
+
+        assertThatIllegalArgumentException()
+                .as("a selector is consumer sent and unbounded wherever the selectors are taken as they are sent")
+                .isThrownBy(() -> names(selector + "==high"))
+                .satisfies(refusal -> assertThat(refusal.getMessage())
+                        .startsWith("Cannot filter on unknown property caffeine")
+                        .endsWith("...")
+                        .hasSizeLessThan(200));
+    }
+
+    @Test
     @DisplayName("refuses a malformed query, an unknown property and a query nested too deeply")
     void refusesAMalformedQuery() {
         assertThatThrownBy(() -> names("origin=!=")).isInstanceOf(RSQLParserException.class);

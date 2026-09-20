@@ -54,10 +54,10 @@ public final class RsqlComparison {
     private static final String WILDCARDS = "*%";
 
     /**
-     * The number of characters of an argument an error message quotes, enough to recognize a filter without
-     * writing the quarter of a megabyte a consumer is free to send into the logs of the application.
+     * The number of characters of an argument or a selector an error message quotes, enough to recognize a filter
+     * without writing the quarter of a megabyte a consumer is free to send into the logs of the application.
      */
-    private static final int MAX_QUOTED_LENGTH = 100;
+    static final int MAX_QUOTED_LENGTH = 100;
 
     private final ComparisonNode node;
 
