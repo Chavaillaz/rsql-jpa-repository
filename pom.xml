@@ -210,6 +210,48 @@
     </dependencies>
 
     <build>
+        <pluginManagement>
+            <!-- The plugins of the lifecycles the build only binds by default, which Maven would otherwise resolve to
+                 the versions it ships with, older ones changing with the version of Maven building it -->
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.5.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.5.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.5.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>3.2.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>3.2.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-site-plugin</artifactId>
+                    <version>3.22.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-project-info-reports-plugin</artifactId>
+                    <version>3.9.0</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
         <plugins>
             <plugin>
                 <!-- Declared first, to run before the other plugins of the "validate" phase: Checkstyle, which
@@ -232,6 +274,8 @@
                                 <requireMavenVersion>
                                     <version>3.9</version>
                                 </requireMavenVersion>
+                                <!-- Fails a plugin added without a version, rather than leaving it to Maven -->
+                                <requirePluginVersions/>
                             </rules>
                         </configuration>
                     </execution>
