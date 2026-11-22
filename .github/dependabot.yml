@@ -13,6 +13,16 @@ updates:
       dependencies:
         patterns: [ "*" ]
         update-types: [ minor, patch ]
+    ignore:
+      # Jakarta Persistence and Hibernate ORM, at the versions the README says the library requires, and the
+      # base library, released along with the extension: their next major changes what the library asks of an
+      # application, which is a decision rather than an update
+      - dependency-name: "jakarta.persistence:jakarta.persistence-api"
+        update-types: [ "version-update:semver-major" ]
+      - dependency-name: "org.hibernate.orm:*"
+        update-types: [ "version-update:semver-major" ]
+      - dependency-name: "com.chavaillaz:light-jpa-repository"
+        update-types: [ "version-update:semver-major" ]
 
   # The actions the workflows run on, whose major tag is what is pinned, so that only the next major shows up
   - package-ecosystem: github-actions
