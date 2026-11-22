@@ -16,7 +16,8 @@ updates:
 
   # The actions the workflows run on, whose major tag is what is pinned, so that only the next major shows up
   - package-ecosystem: github-actions
-    directory: "/"
+    # The root alone covers the workflows, not the composite action they set the build up through
+    directories: [ "/", "/.github/actions/*" ]
     schedule:
       interval: monthly
     groups:
