@@ -357,26 +357,28 @@
             </plugin>
 
             <plugin>
+                <!-- Enforces the import order convention defined in checkstyle.xml.
+                     Bound to "validate" so a style violation fails the build before compilation is even attempted. -->
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
                 <version>3.6.0</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>14.4.0</version>
+                    </dependency>
+                </dependencies>
                 <configuration>
-                    <configLocation>checkstyle.xml</configLocation>
-                    <sourceDirectories>
-                        <sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
-                    </sourceDirectories>
-                    <testSourceDirectories>
-                        <testSourceDirectory>${project.basedir}/src/test/java</testSourceDirectory>
-                    </testSourceDirectories>
+                    <configLocation>${project.basedir}/checkstyle.xml</configLocation>
                     <includeTestSourceDirectory>true</includeTestSourceDirectory>
                     <consoleOutput>true</consoleOutput>
-                    <violationSeverity>warning</violationSeverity>
                     <failOnViolation>true</failOnViolation>
                 </configuration>
                 <executions>
                     <execution>
-                        <id>check-imports</id>
-                        <phase>verify</phase>
+                        <id>check-import-order</id>
+                        <phase>validate</phase>
                         <goals>
                             <goal>check</goal>
                         </goals>
