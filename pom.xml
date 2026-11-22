@@ -73,6 +73,16 @@
             <version>2.2.0</version>
         </dependency>
 
+        <!-- Required by the module of Jakarta Transactions, which the base library requires, along with Jakarta
+             Interceptors it brings, which the POM of Jakarta Transactions leaves to the container: needed to resolve
+             the module of the extension -->
+        <dependency>
+            <groupId>jakarta.cdi</groupId>
+            <artifactId>jakarta.cdi-api</artifactId>
+            <version>5.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+
         <dependency>
             <groupId>io.github.nstdio</groupId>
             <artifactId>rsql-parser</artifactId>
@@ -331,6 +341,10 @@
                     <execution>
                         <id>default-testCompile</id>
                         <configuration>
+                            <!-- The tests are compiled on the class path rather than into the module: the entities
+                                 they map, which Hibernate reflects on, would otherwise need the module to open
+                                 packages that no application needs opened for its own entities -->
+                            <useModulePath>false</useModulePath>
                             <compilerArgs>
                                 <arg>-Xlint:all,-processing,-classfile</arg>
                             </compilerArgs>
@@ -352,6 +366,10 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.6.1</version>
+                <configuration>
+                    <!-- Run on the class path, where the tests are compiled (see maven-compiler-plugin) -->
+                    <useModulePath>false</useModulePath>
+                </configuration>
             </plugin>
 
             <plugin>
