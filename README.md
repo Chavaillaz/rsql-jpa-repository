@@ -265,16 +265,41 @@ of properties does.
 
 ## Contributing
 
-If you have a feature request or found a bug, you can:
+A feature request or a bug report is welcome as an issue, and a change as a pull request from a fork.
 
-- Write an issue
-- Create a pull request
+The build needs **JDK 21 or later** and Maven 3.9 or later, and says so on an older one. Its tests run on H2 in
+memory, and on PostgreSQL, SQL Server or Oracle once `-Ddatabase=postgresql`, `sqlserver` or `oracle` names one,
+which [Testcontainers](https://java.testcontainers.org) then starts in a container, Docker running. Everything the
+build checks runs with:
 
-If you want to contribute then
+```shell
+mvn verify
+```
 
-- Please write tests covering all your changes
-- Ensure you didn't break the build by running `mvn test`
-- Fork the repo and create a pull request
+A change is ready once that passes, which takes:
+
+- **Tests covering it.** They assert with [AssertJ](https://assertj.github.io/doc/), and each is named by a
+  phrase saying what the library does, continuing the name of its class in the report (its `@DisplayName`). A
+  test still running after a minute fails, rather than leaving the build hung on it.
+- **Imports in order**, which Checkstyle verifies (see [checkstyle.xml](checkstyle.xml)): the static ones,
+  then those of `java`, `javax` and `jakarta`, then those of third parties, then those of `com.chavaillaz`,
+  each group sorted alphabetically and separated from the next by a blank line, with no star import and none
+  left unused.
+- **No compiler warning.** Every check of the compiler is on (`-Xlint:all`), and a warning fails the build,
+  on JDK 21 as on any later one, whose compiler adds checks of its own.
+
+Every pull request, and every push to `master`, is built that way on Java 21 and on every later long-term
+support version, with the coverage of the tests measured, and failing once they cover less than 80% of the lines
+or of the branches of the library: `mvn clean -Pcoverage verify` writes the same report to `target/site/jacoco`,
+the `clean` keeping the data of an earlier build out of it. The [databases](.github/workflows/databases.yml)
+workflow runs the tests on PostgreSQL, SQL Server and Oracle too.
+
+### Releasing
+
+A release is made by the maintainer, from a clean working tree: `sh release.sh` asks for the version, sets it
+in the POM, and pushes that commit as a tag of the same name, `master` keeping its snapshot version.
+Publishing a GitHub release for that tag then starts the [workflow](.github/workflows/maven-publish.yml)
+building, signing and publishing the artifacts to Maven Central.
 
 ## License
 
