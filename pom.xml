@@ -395,6 +395,16 @@
                 </dependencies>
                 <configuration>
                     <configLocation>${project.basedir}/checkstyle.xml</configLocation>
+                    <!-- The written sources only: by default, the check also reads the source roots the compiler
+                         adds, which the release profile reaches, its source and javadoc jars forking a lifecycle
+                         that validates again after the compilation, where the metamodel Hibernate generates
+                         breaks the import order -->
+                    <sourceDirectories>
+                        <sourceDirectory>${project.build.sourceDirectory}</sourceDirectory>
+                    </sourceDirectories>
+                    <testSourceDirectories>
+                        <testSourceDirectory>${project.build.testSourceDirectory}</testSourceDirectory>
+                    </testSourceDirectories>
                     <includeTestSourceDirectory>true</includeTestSourceDirectory>
                     <consoleOutput>true</consoleOutput>
                     <failOnViolation>true</failOnViolation>
