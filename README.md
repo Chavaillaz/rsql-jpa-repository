@@ -2,7 +2,7 @@
 
 ![Quality Gate](https://github.com/chavaillaz/rsql-jpa-repository/actions/workflows/code-quality.yml/badge.svg)
 ![Dependency Check](https://github.com/chavaillaz/rsql-jpa-repository/actions/workflows/dependency-check.yml/badge.svg)
-[![Maven Central](https://img.shields.io/maven-central/v/com.chavaillaz/rsql-jpa-repository?label=Maven%20Central)](https://central.sonatype.com/artifact/com.chavaillaz/rsql-jpa-repository)
+[![Maven Central](https://maven-badges.sml.io/sonatype-central/com.chavaillaz/rsql-jpa-repository/badge.svg?subject=Maven%20Central&color=blue)](https://maven-badges.sml.io/sonatype-central/com.chavaillaz/rsql-jpa-repository)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 Dynamic [RSQL](https://github.com/jirutka/rsql-parser) filtering extension for
