@@ -37,6 +37,9 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- The date every entry of the archives carries, so that a commit builds the same bytes wherever it is
+             built. The release script sets it along with the version, through versions:set -->
+        <project.build.outputTimestamp>2026-11-22T00:00:00Z</project.build.outputTimestamp>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <hibernate.version>7.4.14.Final</hibernate.version>
         <lombok.version>1.18.48</lombok.version>
